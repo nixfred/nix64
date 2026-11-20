@@ -241,10 +241,13 @@ bun bin/c64ctl.ts screen                       # and read what it shows
 stops the machine. Run `bun bin/c64ctl.ts help` for the commands. The agent skill that teaches an AI to use
 it is [`skills/c64/SKILL.md`](skills/c64/SKILL.md).
 
-**Tested:** built from source and run in a fresh Omarchy 4.0.2 virtual machine, where a screenshot shows the
-C64 boot screen in a Hyprland window and then the output of a program that `c64ctl` typed in. Unit tests
-(49) and the end-to-end test pass. **Not yet verified:** that you can hear the sound (VICE holds an open
-audio stream; nobody has listened), and the default video standard is PAL until machine files exist.
+**Tested:** built from source and installed with pacman on two real Omarchy machines (a desktop and a
+14 GB laptop), and in a fresh Omarchy 4.0.2 virtual machine. On both real machines the 49 unit tests and the
+6-step end-to-end test pass against the installed engine (with SDL's dummy display, so no window opened). In
+the virtual machine a screenshot shows the C64 boot screen in a Hyprland window, and then the output of a
+program that `c64ctl` typed in. **Not yet verified:** the window on a real desktop, and that you can hear the
+sound (VICE holds an open audio stream; nobody has listened). The default video standard is PAL until
+machine files exist.
 
 ## Try the proof
 
