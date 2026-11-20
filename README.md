@@ -156,7 +156,8 @@ connected:
 
 Jiffies per second again, two separate runs of the reader in this repo. Control-to-control wobble alone is
 about 0.4, and the reader rows land inside that wobble with no trend as the read rate climbs by two orders
-of magnitude. Polling the monitor, by contrast, climbs steadily from 4% to 41% fast. Frames per second held
+of magnitude. Polling the monitor, by contrast, makes the clock run 4% to 41% fast, and it gets worse as the polling
+rate rises. Frames per second held
 between 59.5 and 60.0 in both runs. At the top read rate a reader needed a seqlock retry on 2 of 7,256 reads
 in run 1 and on 71 of 6,890 in run 2 (about 1%). A retry just means "read again", which is what the seqlock
 is for.
