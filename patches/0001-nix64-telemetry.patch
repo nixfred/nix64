@@ -1,0 +1,112 @@
+Nix64 patch 0001: per-frame telemetry via shared memory (x64sc, xscpu64)
+
+Publishes main RAM, colour RAM and VIC-II registers once per emulated frame into a
+shared-memory file when NIX64_TELEMETRY names a file. Readers use a seqlock.
+Replaces polling through the binary monitor, which halts the CPU on every command
+and measurably speeds up emulated time (60.04 -> 71.3 jiffies/s at 20 Hz polling).
+With this patch, reading at ~900 Hz leaves the clock at 60.00 jiffies/s.
+Against: VICE 3.10 (vice-3.10.tar.gz, b2sum d41bfe4e...). License: GPL-2.0-or-later, same as VICE.
+
+--- a/src/viciisc/vicii.c
++++ b/src/viciisc/vicii.c
+@@ -63,6 +63,84 @@
+ #include "video.h"
+ #include "viewport.h"
+ 
++/* ---- Nix64 telemetry (patch 0001) ---------------------------------------
++ * Publishes machine state once per frame into a shared-memory file so an
++ * outside observer (the Nix64 agent, hub and overlays) can watch the machine
++ * WITHOUT the binary monitor, which halts the CPU on every command.
++ * Enabled only when the environment variable NIX64_TELEMETRY names a file.
++ * Layout is versioned. Readers use the seqlock in `seq` (odd = being written).
++ */
++#if defined(__unix__) || defined(__APPLE__)
++#include <fcntl.h>
++#include <sys/mman.h>
++#include <unistd.h>
++
++#define NIX64_TEL_VERSION 1
++
++struct nix64_telemetry {
++    char magic[8];             /* "NIX64TEL" */
++    uint32_t version;
++    uint32_t size;
++    volatile uint32_t seq;
++    uint32_t frame;            /* frames emulated since start */
++    uint32_t reserved[2];
++    uint8_t vic[64];           /* VIC-II registers, offset 32 */
++    uint8_t color[1024];       /* colour RAM, offset 96 */
++    uint8_t ram[65536];        /* main RAM, offset 1120 */
++};
++
++static void nix64_telemetry_frame(void)
++{
++    static int state = 0;      /* 0 untried, 1 on, -1 off */
++    static struct nix64_telemetry *t = NULL;
++
++    if (state == 0) {
++        const char *path = getenv("NIX64_TELEMETRY");
++
++        state = -1;
++        if (path != NULL && *path != '\0') {
++            int fd = open(path, O_RDWR | O_CREAT, 0600);
++
++            if (fd >= 0) {
++                if (ftruncate(fd, (off_t)sizeof(struct nix64_telemetry)) == 0) {
++                    void *p = mmap(NULL, sizeof(struct nix64_telemetry), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
++
++                    if (p != MAP_FAILED) {
++                        t = (struct nix64_telemetry *)p;
++                        memset(t, 0, sizeof(*t));
++                        memcpy(t->magic, "NIX64TEL", 8);
++                        t->version = NIX64_TEL_VERSION;
++                        t->size = (uint32_t)sizeof(*t);
++                        state = 1;
++                    }
++                }
++                close(fd);
++            }
++            if (state < 0) {
++                fprintf(stderr, "nix64 telemetry: cannot map %s\n", path);
++            }
++        }
++    }
++    if (state < 0) {
++        return;
++    }
++
++    t->seq++;                  /* odd: writing */
++    __sync_synchronize();
++    memcpy(t->ram, mem_ram, sizeof(t->ram));
++    memcpy(t->color, mem_color_ram_vicii, sizeof(t->color));
++    memcpy(t->vic, vicii.regs, sizeof(t->vic));
++    t->frame++;
++    __sync_synchronize();
++    t->seq++;                  /* even: stable */
++}
++#else
++static void nix64_telemetry_frame(void)
++{
++}
++#endif
++/* ---- end Nix64 telemetry -------------------------------------------- */
++
+ 
+ void vicii_set_phi1_addr_options(uint16_t mask, uint16_t offset)
+ {
+@@ -440,6 +518,7 @@
+     if (vicii.raster.current_line == 0) {
+         /* no vsync here for NTSC  */
+         if ((unsigned int)vicii.last_displayed_line < vicii.screen_height) {
++            nix64_telemetry_frame();
+             vsync_do_vsync(vicii.raster.canvas);
+         }
+ 
+@@ -448,6 +527,7 @@
+     /* vsync for NTSC */
+     if ((unsigned int)vicii.last_displayed_line >= vicii.screen_height
+         && vicii.raster.current_line == vicii.last_displayed_line - vicii.screen_height + 1) {
++        nix64_telemetry_frame();
+         vsync_do_vsync(vicii.raster.canvas);
+     }
+ }
