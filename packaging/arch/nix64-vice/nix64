@@ -1,0 +1,13 @@
+#!/bin/bash
+# nix64 launcher (milestone 1): start the Nix64 engine in a window.
+#
+# +logcolorize is always passed, and passed first: VICE 3.10 segfaults at startup in
+# log_archdep when stdout is not a terminal (desktop launcher, systemd) unless it is set.
+# NIX64_TELEMETRY makes the patched engine publish RAM, colour RAM and VIC-II registers
+# into shared memory once per frame, so an observer never has to stop the machine.
+set -eu
+root=/usr/lib/nix64
+run="${XDG_RUNTIME_DIR:-/tmp}/nix64"
+mkdir -p "$run"
+export NIX64_TELEMETRY="$run/default.shm"
+exec "$root/bin/x64sc" +logcolorize "$@"

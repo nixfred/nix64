@@ -1,0 +1,63 @@
+# Maintainer: nixfred <https://nixfred.com>
+#
+# Nix64 engine: VICE 3.10 with the Nix64 patch set, built from source on each host.
+#
+# Based on Arch's own `vice` PKGBUILD. Credit and thanks to its authors:
+#   Alexander F. Rødseth <xyproto@archlinux.org>, Giovanni Scafora <giovanni@archlinux.org>,
+#   Tom Newsom <Jeepster@gmx.co.uk>.
+#
+# Installs under /usr/lib/nix64 so it never shadows pacman's `vice` or `vice-sdl2`
+# (the two can be installed side by side). The only thing placed in /usr/bin is `nix64`.
+#
+# When a patch changes, refresh its sum:  updpkgsums
+pkgname=nix64-vice
+_vice=3.10
+pkgver=3.10
+pkgrel=1
+pkgdesc='Nix64 engine: VICE x64sc (SDL2) with the Nix64 telemetry and input patches'
+arch=(x86_64)
+license=(GPL-2.0-or-later)
+url='https://github.com/nixfred/nix64'
+depends=(alsa-lib giflib libpng libpulse libusb sdl2 sdl2_image)
+makedepends=(dos2unix glew glib2-devel libevdev libjpeg-turbo libpcap libxaw python xa xdg-utils
+             xorg-bdftopcf xorg-mkfontscale)
+optdepends=('libpcap: Ethernet cartridges on a real network card')
+source=("https://downloads.sourceforge.net/project/vice-emu/releases/vice-$_vice.tar.gz"
+        disable-fc-cache.patch
+        0001-nix64-telemetry.patch
+        0002-nix64-input.patch
+        nix64)
+b2sums=('d41bfe4ed5213f4fff345f195de60e95d87b9c5901e89ff31d221841e51358a55e1f7fecae5afae0e71439d5a8da7411e632bc42b582e5b17b72dba07ae2cadd'
+        'a27ff2a70537a57fd1c3be561181403fede8a6fd75ca8a31a4a4ed97b010cd8f8f0376a619be126ac22ad8c81bf0d1fd9c7e5e411bf94da32006c9ecdd10d32e'
+        'c15b3855d4c2a7cf61a0662202f42b00734f71ea3a6cf6e3b78305e42bd71b28ed941e3bdece81a89706e3acbed6674250032ce3c6e65d86730a5c2f6d5ac4c9'
+        'c22a9ef9e4fb616bd4f90ce261706a7eef667ad18846b4c32f5bb55850278977af68745a3306498204344f91f711f891df77be9c3b6a7e1541242b8f4a63bb33'
+        '8963cee8154a576accaa9f18f2d518753880765fd11b7b628081e318198eba39a4e9b59d166b366ebd274b5dc728731b711742b2f5d1460e2593e821fce9efbd')
+
+prepare() {
+  cd vice-$_vice
+  rm -rf src/lib/{liblame,libx264,libffmpeg}
+  patch -p1 -i ../disable-fc-cache.patch
+  patch -p1 -i ../0001-nix64-telemetry.patch
+  patch -p1 -i ../0002-nix64-input.patch
+  sed -i 's/lib64/lib/g' configure.ac
+  autoreconf -fi
+}
+
+build() {
+  export CFLAGS="$CFLAGS -Wl,--allow-multiple-definition -w"
+  cd vice-$_vice
+  ./configure \
+    --disable-ffmpeg \
+    --disable-gtk3ui \
+    --enable-sdl2ui \
+    --with-gif \
+    --prefix=/usr/lib/nix64 \
+    --libdir=/usr/lib/nix64/lib
+  make
+}
+
+package() {
+  make -C vice-$_vice DESTDIR="$pkgdir" realdocdir=/usr/share/doc/$pkgname install
+  install -Dm755 nix64 "$pkgdir/usr/bin/nix64"
+  install -Dm644 vice-$_vice/COPYING "$pkgdir/usr/share/licenses/$pkgname/COPYING"
+}
