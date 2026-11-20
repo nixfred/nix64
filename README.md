@@ -63,8 +63,8 @@ lets you do the typing.
 
 ## What it will be
 
-Each pillar below is a decision that has been made. **None of these is shipped yet.** What exists today is in
-[Proof](#proof-whats-real-today), and the order of work is in the [Roadmap](#roadmap).
+Each pillar below is a decision that has been made. **Most are not built yet.** What exists today is in
+[Proof](#proof-whats-real-today) and [Install it](#install-it), and the order of work is in the [Roadmap](#roadmap).
 
 ### A real AI at the real prompt
 
@@ -166,6 +166,26 @@ is for.
 need to be repeated on a real SDL2 or GTK build with sound on a real desktop. That is on the
 [Roadmap](#roadmap), and the badge says "none measured", not "none".
 
+**The other direction: driving the machine without stopping it.**
+[`patches/0002-nix64-input.patch`](patches/0002-nix64-input.patch) adds an input ring to the end of the same
+shared-memory file. A client appends events (a key down or up on the real keyboard matrix, a PETSCII
+character through the KERNAL keyboard buffer, a joystick position), each stamped with the emulated frame it
+is due at, and VICE applies it at exactly that frame. There is no monitor connection, so nothing stops, and
+typing speed is counted in frames: exact, and replayable. Every check looks at what the machine itself did,
+not at what was sent:
+
+| Check | What the machine did |
+|---|---|
+| typed text | `PRINT "NIX64 INPUT OK"` printed its output |
+| matrix key | a raw press of row 1 col 2 typed `A`, and Return ran it: `?SYNTAX  ERROR` |
+| joystick | port 2 up and port 1 fire read back through the C64's own `PEEK(56320)` and `PEEK(56321)` as **126** and **239**; at rest 127 and 255 |
+| RUN/STOP | pressed through the matrix, it broke a running `GOTO` loop: `BREAK IN 10` |
+| bad event | counted as rejected, never applied |
+
+One finding worth knowing: a held port 2 stick types phantom keys, because on a C64 it shares its CIA lines
+with the keyboard. Real hardware does the same, and so does this. Tests:
+[`tests/input-test.ts`](tests/input-test.ts) and [`tests/machine.e2e.test.ts`](tests/machine.e2e.test.ts).
+
 <details>
 <summary><b>Telemetry file layout (version 1)</b></summary>
 
@@ -202,6 +222,30 @@ and cursor and measures the emulated clock while it reads.
 
 </details>
 
+## Install it
+
+For Arch and Omarchy. This builds VICE 3.10 from source with the Nix64 patches and installs it under
+`/usr/lib/nix64`, next to pacman's own `vice` (it never shadows it). The only thing it puts in `/usr/bin` is
+the `nix64` launcher.
+
+```bash
+git clone https://github.com/nixfred/nix64 && cd nix64
+(cd packaging/arch/nix64-vice && makepkg -si)
+
+nix64                                          # a C64 in a window
+bun bin/c64ctl.ts line 'PRINT "HELLO"'         # from another terminal: type into it
+bun bin/c64ctl.ts screen                       # and read what it shows
+```
+
+`c64ctl` needs [bun](https://bun.sh). It reads and writes shared memory, never the VICE monitor, so it never
+stops the machine. Run `bun bin/c64ctl.ts help` for the commands. The agent skill that teaches an AI to use
+it is [`skills/c64/SKILL.md`](skills/c64/SKILL.md).
+
+**Tested:** built from source and run in a fresh Omarchy 4.0.2 virtual machine, where a screenshot shows the
+C64 boot screen in a Hyprland window and then the output of a program that `c64ctl` typed in. Unit tests
+(49) and the end-to-end test pass. **Not yet verified:** that you can hear the sound (VICE holds an open
+audio stream; nobody has listened), and the default video standard is PAL until machine files exist.
+
 ## Try the proof
 
 This is the headless recipe that was verified end to end. It builds VICE 3.10 with patch 0001, runs a
@@ -232,8 +276,8 @@ kill %1
 ```
 
 You will see the C64's boot screen decoded straight from shared memory, then five timed runs showing the
-jiffy clock and frame rate at each read rate. A windowed SDL2 or GTK build, a PKGBUILD for Arch and Omarchy,
-and a launcher are the next things on the [Roadmap](#roadmap).
+jiffy clock and frame rate at each read rate. That headless build is the measured one. For a window, see
+[Install it](#install-it).
 
 ## Roadmap
 
@@ -241,12 +285,15 @@ The build order is fixed: **foundation, then the agent, then the Hub, then polis
 
 **1. Foundation**
 - [x] VICE 3.10 telemetry patch and a seqlock reader, measured
-- [ ] PKGBUILD for Arch and Omarchy, built from source on each host
-- [ ] Launcher that always passes `+logcolorize`, and the machine file format with `nix64 start <machine>`
-- [ ] Windowed SDL2 build with sound, and the telemetry measurements repeated on it
+- [x] Input ring patch: keys, text and joystick with no monitor and no stall, verified
+- [x] PKGBUILD for Arch and Omarchy, built from source on each host, shipped in `packaging/arch/nix64-vice`
+- [x] `nix64` launcher that always passes `+logcolorize` (one default machine for now)
+- [ ] The machine file format and `nix64 start <machine>`
+- [ ] The telemetry measurements repeated on the windowed build with sound
 
 **2. The agent**
-- [ ] `c64ctl` and a `c64` skill the Omarchy default agent can load
+- [x] `c64ctl`: watch the screen, type, press keys, move a joystick, wait for text, peek RAM
+- [x] A `c64` skill file for the agent (written; not yet wired into Omarchy's agents)
 - [ ] Assist mode: ghost text, hint strip, struggle detection, Guide me
 - [ ] Drive mode: a prompt inside Nix64, visible typing, an activity feed
 - [ ] Agent settings that find the agent and local model runtimes already on your machine
