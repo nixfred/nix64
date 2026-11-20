@@ -1,0 +1,24 @@
+# Nix64 never carries C64 ROMs, commercial software or machine images.
+# Bring your own; these patterns keep them out of git by accident.
+*.d64
+*.d71
+*.d81
+*.g64
+*.g71
+*.x64
+*.t64
+*.tap
+*.crt
+*.vsf
+*.rom
+*.sid
+/roms/
+/disks/
+/shelf/
+# VICE source tree and tarballs fetched for the proof steps in the README
+/vice-*/
+/vice-*.tar.gz
+# telemetry shared-memory files and local scratch
+*.shm
+*.log
+node_modules/
