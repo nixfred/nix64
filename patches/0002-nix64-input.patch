@@ -1,0 +1,125 @@
+Nix64 patch 0002: input ring in shared memory (keys, PETSCII text, joystick)
+
+Applies on top of patch 0001. Adds the other direction to the shared-memory file: a ring of
+input events at offset 66656. A client appends events stamped with the emulated frame they are
+due at, and VICE applies them at that frame from the same per-frame hook as the telemetry.
+No binary monitor connection is needed, so the machine is never stopped, and typing speed is
+counted in emulated frames: exact, and replayable.
+
+Event (8 bytes): u32 at_frame (0 = at once), u8 type, u8 a, u8 b, u8 c.
+  type 1 key     a = matrix row, b = matrix col, c = 1 down / 0 up   (keyboard_set_keyarr)
+  type 2 PETSCII a = raw PETSCII byte through the KERNAL keyboard buffer (kbdbuf_feed)
+  type 3 joy     a = port (0 = port 1, 1 = port 2), b = up 1 / down 2 / left 4 / right 8 / fire 16
+Ring: head (written only by VICE), tail (written only by the client), applied, rejected, then
+256 slots. Client writes the slot, then the tail. File size becomes 68720, version 2.
+Version 1 readers keep working: the first 66656 bytes are unchanged.
+Verified by tests/input-test.ts against the machine itself, never by what was sent.
+Against: VICE 3.10 with patch 0001. License: GPL-2.0-or-later, same as VICE.
+
+--- a/src/viciisc/vicii.c
++++ b/src/viciisc/vicii.c
+@@ -62,6 +62,9 @@
+ #include "vsync.h"
+ #include "video.h"
+ #include "viewport.h"
++#include "joystick.h"
++#include "kbdbuf.h"
++#include "keyboard.h"
+ 
+ /* ---- Nix64 telemetry (patch 0001) ---------------------------------------
+  * Publishes machine state once per frame into a shared-memory file so an
+@@ -69,13 +72,40 @@
+  * WITHOUT the binary monitor, which halts the CPU on every command.
+  * Enabled only when the environment variable NIX64_TELEMETRY names a file.
+  * Layout is versioned. Readers use the seqlock in `seq` (odd = being written).
++ *
++ * Patch 0002 adds the other direction: an input ring at the end of the same file. A client
++ * appends events (keys, PETSCII text, joystick) stamped with the emulated frame they are
++ * due at; VICE applies them at that frame. No monitor connection, no stall, and typing
++ * speed is exact and replayable because it is counted in emulated frames.
+  */
+ #if defined(__unix__) || defined(__APPLE__)
+ #include <fcntl.h>
+ #include <sys/mman.h>
+ #include <unistd.h>
+ 
+-#define NIX64_TEL_VERSION 1
++#define NIX64_TEL_VERSION 2
++
++/* input event types */
++#define NIX64_IN_KEY      1   /* a = matrix row, b = matrix col, c = 1 down / 0 up */
++#define NIX64_IN_PETSCII  2   /* a = raw PETSCII byte, typed through the KERNAL keyboard buffer */
++#define NIX64_IN_JOY      3   /* a = port (0 = port 1, 1 = port 2), b = value: up 1, down 2, left 4, right 8, fire 16 */
++#define NIX64_IN_SLOTS    256
++
++struct nix64_input_event {
++    uint32_t at_frame;         /* apply once the frame counter reaches this; 0 = at once */
++    uint8_t type;
++    uint8_t a;
++    uint8_t b;
++    uint8_t c;
++};
++
++struct nix64_input {
++    volatile uint32_t head;    /* next event VICE will take: written only by VICE */
++    volatile uint32_t tail;    /* next free slot: written only by the client */
++    uint32_t applied;          /* events applied so far, for the client to check */
++    uint32_t rejected;         /* events dropped as invalid */
++    struct nix64_input_event ev[NIX64_IN_SLOTS];
++};
+ 
+ struct nix64_telemetry {
+     char magic[8];             /* "NIX64TEL" */
+@@ -87,8 +117,43 @@
+     uint8_t vic[64];           /* VIC-II registers, offset 32 */
+     uint8_t color[1024];       /* colour RAM, offset 96 */
+     uint8_t ram[65536];        /* main RAM, offset 1120 */
++    struct nix64_input in;     /* input ring, offset 66656 (version 2) */
+ };
+ 
++static void nix64_apply_input(struct nix64_telemetry *t)
++{
++    struct nix64_input *in = &t->in;
++
++    while (in->head != in->tail) {
++        struct nix64_input_event e = in->ev[in->head % NIX64_IN_SLOTS];
++
++        if (e.at_frame > t->frame) {
++            break;             /* events are in order: the rest are due later */
++        }
++        if (e.type == NIX64_IN_KEY && e.a < KBD_ROWS && e.b < KBD_COLS) {
++            keyboard_set_keyarr(e.a, e.b, e.c ? 1 : 0);
++            in->applied++;
++        } else if (e.type == NIX64_IN_PETSCII && e.a != 0) {
++            char s[2];
++
++            s[0] = (char)e.a;
++            s[1] = '\0';
++            if (kbdbuf_feed(s) == 0) {
++                in->applied++;
++            } else {
++                in->rejected++;
++            }
++        } else if (e.type == NIX64_IN_JOY && e.a < 2) {
++            joystick_set_value_absolute(e.a == 0 ? JOYPORT_1 : JOYPORT_2, e.b);
++            in->applied++;
++        } else {
++            in->rejected++;
++        }
++        __sync_synchronize();
++        in->head++;
++    }
++}
++
+ static void nix64_telemetry_frame(void)
+ {
+     static int state = 0;      /* 0 untried, 1 on, -1 off */
+@@ -133,6 +198,8 @@
+     t->frame++;
+     __sync_synchronize();
+     t->seq++;                  /* even: stable */
++
++    nix64_apply_input(t);
+ }
+ #else
+ static void nix64_telemetry_frame(void)
