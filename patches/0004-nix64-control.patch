@@ -1,0 +1,77 @@
+Nix64 patch 0004: warp, the RESTORE key, and an instant flush for the Stop key
+
+Applies on top of patches 0001 to 0003. Version 4 of the shared-memory file (size unchanged).
+
+Two new input events in the ring (patch 0002):
+  type 4 RESTORE  a = 1 down / 0 up. The RESTORE key is not in the keyboard matrix (it pulls NMI),
+                  so it cannot be a type 1 key event. Calls machine_set_restore_key().
+  type 5 WARP     a = 1 warp on / 0 warp off. Calls vsync_set_warp_mode(). VICE has no resource for
+                  warp (setting Speed to 0 is refused), so this is the only way to toggle it at runtime
+                  without a window or a hotkey.
+And one control word: header word reserved[0] (offset 24). The client increments it to say "drop
+everything queued, let go of every key and stick": the ring head jumps to the tail, the keyboard
+matrix, the keyboard buffer, both joystick ports and RESTORE are cleared. This is the Stop key for
+whoever is driving the machine (the Nix64 agent): it works at once, however much typing is still queued.
+Older readers keep working. Against: VICE 3.10 with patches 0001 to 0003. License: GPL-2.0-or-later.
+
+--- a/src/viciisc/vicii.c
++++ b/src/viciisc/vicii.c
+@@ -66,6 +66,7 @@
+ #include "kbdbuf.h"
+ #include "keyboard.h"
+ #include "palette.h"
++#include "machine.h"
+ 
+ /* ---- Nix64 telemetry (patch 0001) ---------------------------------------
+  * Publishes machine state once per frame into a shared-memory file so an
+@@ -84,7 +85,7 @@
+ #include <sys/mman.h>
+ #include <unistd.h>
+ 
+-#define NIX64_TEL_VERSION 3
++#define NIX64_TEL_VERSION 4
+ 
+ /* Patch 0003: the finished picture. Each frame the visible area (what VICE would show in its
+  * window, borders included) is copied out as one palette index per pixel, with the palette that
+@@ -106,6 +107,8 @@
+ #define NIX64_IN_KEY      1   /* a = matrix row, b = matrix col, c = 1 down / 0 up */
+ #define NIX64_IN_PETSCII  2   /* a = raw PETSCII byte, typed through the KERNAL keyboard buffer */
+ #define NIX64_IN_JOY      3   /* a = port (0 = port 1, 1 = port 2), b = value: up 1, down 2, left 4, right 8, fire 16 */
++#define NIX64_IN_RESTORE  4   /* a = 1 down / 0 up: the RESTORE key, which is not in the keyboard matrix (it pulls NMI) */
++#define NIX64_IN_WARP     5   /* a = 1 warp on / 0 warp off */
+ #define NIX64_IN_SLOTS    256
+ 
+ struct nix64_input_event {
+@@ -185,6 +188,19 @@
+ static void nix64_apply_input(struct nix64_telemetry *t)
+ {
+     struct nix64_input *in = &t->in;
++    static uint32_t flush_seen = 0;
++
++    /* Patch 0004: the client bumps header word reserved[0] to say "drop everything queued, let go of
++     * every key and stick". This is the Stop key: it works at once, whatever is still waiting in the ring. */
++    if (t->reserved[0] != flush_seen) {
++        flush_seen = t->reserved[0];
++        in->head = in->tail;
++        keyboard_clear_keymatrix();
++        kbdbuf_flush();
++        joystick_set_value_absolute(JOYPORT_1, 0);
++        joystick_set_value_absolute(JOYPORT_2, 0);
++        machine_set_restore_key(0);
++    }
+ 
+     while (in->head != in->tail) {
+         struct nix64_input_event e = in->ev[in->head % NIX64_IN_SLOTS];
+@@ -205,6 +221,12 @@
+             } else {
+                 in->rejected++;
+             }
++        } else if (e.type == NIX64_IN_RESTORE) {
++            machine_set_restore_key(e.a ? 1 : 0);
++            in->applied++;
++        } else if (e.type == NIX64_IN_WARP) {
++            vsync_set_warp_mode(e.a ? 1 : 0);
++            in->applied++;
+         } else if (e.type == NIX64_IN_JOY && e.a < 2) {
+             joystick_set_value_absolute(e.a == 0 ? JOYPORT_1 : JOYPORT_2, e.b);
+             in->applied++;

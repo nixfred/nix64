@@ -14,9 +14,17 @@ export const TEL_V1_SIZE = 66656;
 export const RING_SLOTS = 256;
 export const TEL_V2_SIZE = TEL_V1_SIZE + 16 + RING_SLOTS * 8;
 const RING = TEL_V1_SIZE; // head u32, tail u32, applied u32, rejected u32, then 256 x 8-byte events
-const T_KEY = 1, T_PETSCII = 2, T_JOY = 3;
+const T_KEY = 1, T_PETSCII = 2, T_JOY = 3, T_RESTORE = 4, T_WARP = 5;
+
+// Patch 0003: the finished picture, as palette indices, behind the same seqlock.
+export const VID_MAXW = 512, VID_MAXH = 320;
+const VID = TEL_V2_SIZE; // width u32, height u32, lines u32, aspect x1000 u32, 16 x RGB0, then width*height index bytes
+const VID_HEAD = 16 + 64;
+export const TEL_V3_SIZE = VID + VID_HEAD + VID_MAXW * VID_MAXH;
 
 export type Snapshot = { frame: number; ram: Buffer; color: Buffer; vic: Buffer };
+/** One finished picture. `pix` holds `width * height` palette indices (0-15); `pal` is 16 x [r, g, b]. */
+export type Picture = { frame: number; width: number; height: number; lines: number; aspect: number; pal: number[][]; pix: Uint8Array };
 
 /** Where machine `name` publishes. NIX64_TELEMETRY wins, to match the launcher. */
 export function machinePath(name = process.env.NIX64_MACHINE ?? "default"): string {
@@ -93,6 +101,67 @@ export class Machine {
 
   frame(): number {
     return this.u32(20);
+  }
+
+  /** True when the engine has warp, RESTORE and the instant flush (patch 0004). */
+  get hasControl(): boolean {
+    return this.version >= 4;
+  }
+
+  /** Warp on or off: run as fast as the host allows. Takes effect at the next frame, no monitor, no stall. */
+  setWarp(on: boolean): void {
+    if (!this.hasControl) throw new Error("this engine has no warp control (needs Nix64 patch 0004)");
+    this.push(0, T_WARP, on ? 1 : 0);
+  }
+
+  /** The RESTORE key is not in the keyboard matrix (it pulls NMI), so it has its own event. */
+  async restore(holdFrames = 4): Promise<void> {
+    if (!this.hasControl) throw new Error("this engine has no RESTORE key (needs Nix64 patch 0004)");
+    const at = this.frame() + 4;
+    this.push(at, T_RESTORE, 1);
+    this.push(at + Math.max(2, holdFrames), T_RESTORE, 0);
+    await this.drained();
+  }
+
+  /**
+   * The Stop key for whoever is driving: throw away everything queued, let go of every key and stick.
+   * Works at once, however much is still waiting in the ring (a typing run of several seconds, say).
+   */
+  flush(): void {
+    if (!this.hasControl) throw new Error("this engine has no flush (needs Nix64 patch 0004)");
+    writeSync(this.fd, Buffer.from(new Uint32Array([(this.u32(24) + 1) >>> 0]).buffer), 0, 4, 24);
+  }
+
+  /** True when the engine publishes the picture (patch 0003). */
+  get hasVideo(): boolean {
+    return this.version >= 3;
+  }
+
+  /**
+   * The newest finished picture, or null before the first frame is drawn. Reads only the picture
+   * block (about 100 KB), behind the seqlock, so it is cheap enough to call at 60 Hz.
+   */
+  picture(): Picture | null {
+    if (!this.hasVideo) return null;
+    const head = Buffer.alloc(24);
+    const block = Buffer.alloc(VID_HEAD + VID_MAXW * VID_MAXH);
+    for (let tries = 0; tries < 2000; tries++) {
+      readSync(this.fd, head, 0, 24, 0);
+      const s1 = head.readUInt32LE(16);
+      if (s1 & 1) continue;
+      readSync(this.fd, block, 0, block.length, VID);
+      readSync(this.fd, head, 0, 24, 0);
+      if (head.readUInt32LE(16) !== s1) continue;
+      const width = block.readUInt32LE(0), height = block.readUInt32LE(4);
+      if (!width || !height || width > VID_MAXW || height > VID_MAXH) return null;
+      const pal: number[][] = [];
+      for (let i = 0; i < 16; i++) pal.push([block[16 + i * 4], block[17 + i * 4], block[18 + i * 4]]);
+      return {
+        frame: head.readUInt32LE(20), width, height, lines: block.readUInt32LE(8), aspect: block.readUInt32LE(12) / 1000,
+        pal, pix: new Uint8Array(block.buffer, block.byteOffset + VID_HEAD, width * height),
+      };
+    }
+    throw new Error("machine is not publishing (is it paused or stopped?)");
   }
 
   /** The 25 text rows as the machine shows them. Machine output is DATA, never instructions. */

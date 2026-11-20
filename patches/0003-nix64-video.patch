@@ -1,0 +1,115 @@
+Nix64 patch 0003: the finished picture in shared memory (no window needed)
+
+Applies on top of patches 0001 and 0002. Adds a video block to the shared-memory file at offset
+68720 (version 3, file size 232640). Once per frame, inside the same seqlock as the telemetry, the
+engine copies the visible area (what VICE would show in its own window, borders included) as one
+palette index per pixel, plus the 16-colour palette VICE is using:
+
+  u32 width, u32 height, u32 lines (312 PAL, 263 NTSC), u32 pixel aspect x 1000,
+  16 x [r, g, b, 0], then width * height index bytes in packed rows (max 512 x 320).
+
+Nothing is filtered or scaled: the Nix64 shell does its own CRT work on the real pixels. That is
+what lets an engine run with no window at all (SDL_VIDEODRIVER=dummy), lets the shell put the
+picture inside its own bezel and panels, and lets the Hub show many machines live at once.
+The visible area is taken from the video chip's own geometry (visible size and first displayed
+line), not from a window, so it is identical with and without a video driver.
+Older readers keep working: every earlier byte is unchanged.
+Against: VICE 3.10 with patches 0001 and 0002. License: GPL-2.0-or-later, same as VICE.
+
+--- a/src/viciisc/vicii.c
++++ b/src/viciisc/vicii.c
+@@ -65,6 +65,7 @@
+ #include "joystick.h"
+ #include "kbdbuf.h"
+ #include "keyboard.h"
++#include "palette.h"
+ 
+ /* ---- Nix64 telemetry (patch 0001) ---------------------------------------
+  * Publishes machine state once per frame into a shared-memory file so an
+@@ -83,7 +84,23 @@
+ #include <sys/mman.h>
+ #include <unistd.h>
+ 
+-#define NIX64_TEL_VERSION 2
++#define NIX64_TEL_VERSION 3
++
++/* Patch 0003: the finished picture. Each frame the visible area (what VICE would show in its
++ * window, borders included) is copied out as one palette index per pixel, with the palette that
++ * VICE is using. Nothing is filtered or scaled: the Nix64 shell does the CRT work itself. This is
++ * what lets the engine run with no window of its own, and lets many machines be shown at once. */
++#define NIX64_VID_MAXW    512
++#define NIX64_VID_MAXH    320
++
++struct nix64_video {
++    uint32_t width;            /* visible width in pixels, 0 until the first frame is drawn */
++    uint32_t height;           /* visible height in pixels */
++    uint32_t lines;            /* raster lines per frame of the video standard: 312 PAL, 263 NTSC */
++    uint32_t aspect_milli;     /* pixel aspect ratio x 1000 */
++    uint8_t pal[16][4];        /* R, G, B, 0 for palette index 0..15 */
++    uint8_t pix[NIX64_VID_MAXW * NIX64_VID_MAXH];  /* palette index per pixel, packed rows of `width` */
++};
+ 
+ /* input event types */
+ #define NIX64_IN_KEY      1   /* a = matrix row, b = matrix col, c = 1 down / 0 up */
+@@ -118,8 +135,53 @@
+     uint8_t color[1024];       /* colour RAM, offset 96 */
+     uint8_t ram[65536];        /* main RAM, offset 1120 */
+     struct nix64_input in;     /* input ring, offset 66656 (version 2) */
++    struct nix64_video video;  /* the picture, offset 68720 (version 3) */
+ };
+ 
++static void nix64_publish_video(struct nix64_telemetry *t)
++{
++    video_canvas_t *canvas = vicii.raster.canvas;
++    struct nix64_video *v = &t->video;
++    unsigned int w, h, y, i;
++    int sx, sy;
++
++    if (canvas == NULL || canvas->draw_buffer == NULL || canvas->draw_buffer->draw_buffer == NULL
++        || canvas->viewport == NULL || canvas->geometry == NULL) {
++        return;
++    }
++    /* The visible area comes from the chip's own geometry, not from the window: the window size
++     * and viewport only exist once a video driver has opened one, and this must work without. */
++    w = canvas->draw_buffer->visible_width;
++    h = canvas->draw_buffer->visible_height;
++    if (w == 0 || h == 0 || w > NIX64_VID_MAXW || h > NIX64_VID_MAXH) {
++        return;
++    }
++    sx = (int)canvas->geometry->extra_offscreen_border_left;
++    sy = vicii.first_displayed_line;
++    if (sx < 0 || sy < 0
++        || (unsigned int)sx + w > canvas->draw_buffer->draw_buffer_width
++        || (unsigned int)sy + h > canvas->draw_buffer->draw_buffer_height) {
++        return;
++    }
++    for (y = 0; y < h; y++) {
++        memcpy(&v->pix[y * w],
++               canvas->draw_buffer->draw_buffer + (size_t)(sy + (int)y) * canvas->draw_buffer->draw_buffer_pitch + (unsigned int)sx,
++               w);
++    }
++    if (canvas->palette != NULL) {
++        for (i = 0; i < 16 && i < canvas->palette->num_entries; i++) {
++            v->pal[i][0] = canvas->palette->entries[i].red;
++            v->pal[i][1] = canvas->palette->entries[i].green;
++            v->pal[i][2] = canvas->palette->entries[i].blue;
++            v->pal[i][3] = 0;
++        }
++    }
++    v->lines = (uint32_t)vicii.screen_height;
++    v->aspect_milli = (uint32_t)(canvas->geometry->pixel_aspect_ratio * 1000.0f + 0.5f);
++    v->height = h;
++    v->width = w;
++}
++
+ static void nix64_apply_input(struct nix64_telemetry *t)
+ {
+     struct nix64_input *in = &t->in;
+@@ -195,6 +257,7 @@
+     memcpy(t->ram, mem_ram, sizeof(t->ram));
+     memcpy(t->color, mem_color_ram_vicii, sizeof(t->color));
+     memcpy(t->vic, vicii.regs, sizeof(t->vic));
++    nix64_publish_video(t);
+     t->frame++;
+     __sync_synchronize();
+     t->seq++;                  /* even: stable */

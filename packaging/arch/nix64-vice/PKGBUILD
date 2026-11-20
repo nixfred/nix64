@@ -13,8 +13,8 @@
 pkgname=nix64-vice
 _vice=3.10
 pkgver=3.10
-pkgrel=1
-pkgdesc='Nix64 engine: VICE x64sc (SDL2) with the Nix64 telemetry and input patches'
+pkgrel=2
+pkgdesc='Nix64 engine: VICE x64sc (SDL2) with the Nix64 telemetry, input, video and control patches'
 arch=(x86_64)
 license=(GPL-2.0-or-later)
 url='https://github.com/nixfred/nix64'
@@ -26,11 +26,15 @@ source=("https://downloads.sourceforge.net/project/vice-emu/releases/vice-$_vice
         disable-fc-cache.patch
         0001-nix64-telemetry.patch
         0002-nix64-input.patch
+        0003-nix64-video.patch
+        0004-nix64-control.patch
         nix64)
 b2sums=('d41bfe4ed5213f4fff345f195de60e95d87b9c5901e89ff31d221841e51358a55e1f7fecae5afae0e71439d5a8da7411e632bc42b582e5b17b72dba07ae2cadd'
         'a27ff2a70537a57fd1c3be561181403fede8a6fd75ca8a31a4a4ed97b010cd8f8f0376a619be126ac22ad8c81bf0d1fd9c7e5e411bf94da32006c9ecdd10d32e'
         'c15b3855d4c2a7cf61a0662202f42b00734f71ea3a6cf6e3b78305e42bd71b28ed941e3bdece81a89706e3acbed6674250032ce3c6e65d86730a5c2f6d5ac4c9'
         'c22a9ef9e4fb616bd4f90ce261706a7eef667ad18846b4c32f5bb55850278977af68745a3306498204344f91f711f891df77be9c3b6a7e1541242b8f4a63bb33'
+        '9ee6f6da192a674341111a43669bacbae835a55040198fce75f878af5ae0bf09e8d3cba338ffd09f1b85620b39ab70f40865705431b5de476dd8e87a6c6ec3ab'
+        'e38895c84e9884b7d92e7977f2d2878a72f13543b40793acc60f9e1840bc0942ebfe114a130ff962e62607431cce08c8aeb4dee0e16613c2341074084c213c37'
         '8963cee8154a576accaa9f18f2d518753880765fd11b7b628081e318198eba39a4e9b59d166b366ebd274b5dc728731b711742b2f5d1460e2593e821fce9efbd')
 
 prepare() {
@@ -39,6 +43,8 @@ prepare() {
   patch -p1 -i ../disable-fc-cache.patch
   patch -p1 -i ../0001-nix64-telemetry.patch
   patch -p1 -i ../0002-nix64-input.patch
+  patch -p1 -i ../0003-nix64-video.patch
+  patch -p1 -i ../0004-nix64-control.patch
   sed -i 's/lib64/lib/g' configure.ac
   autoreconf -fi
 }
