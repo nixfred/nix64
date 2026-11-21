@@ -87,7 +87,9 @@ export function unzipMedia(zip: Uint8Array): { name: string; data: Uint8Array }[
     if (name.endsWith("/") || !MEDIA_EXT.has(extname(name).toLowerCase()) || usize > MAX) continue;
     const dstart = lho + 30 + b.readUInt16LE(lho + 26) + b.readUInt16LE(lho + 28);
     const raw = b.subarray(dstart, dstart + csize);
-    const data = method === 0 ? raw : method === 8 ? inflateRawSync(raw) : null;
+    // the size a zip DECLARES is the author's word: cap what inflate may really produce, or a few KB can expand to gigabytes
+    let data: Uint8Array | null;
+    try { data = method === 0 ? raw : method === 8 ? inflateRawSync(raw, { maxOutputLength: MAX }) : null; } catch { data = null; } // too big or damaged: skip this entry
     if (data) out.push({ name: basename(name), data: new Uint8Array(data) });
   }
   return out;
@@ -120,14 +122,26 @@ export async function archiveFiles(id: string): Promise<{ name: string; size: nu
     .filter((f) => f.size > 0 && f.size <= 200 * 1024 * 1024);
 }
 
+const MAX_DOWNLOAD = 200 * 1024 * 1024;
+/** https, and archive.org itself or one of its subdomains (the Archive serves downloads from its own storage hosts, e.g. ia800000.us.archive.org). */
+export function archiveHost(u: string): boolean {
+  try {
+    const x = new URL(u);
+    return x.protocol === "https:" && (x.hostname === "archive.org" || x.hostname.endsWith(".archive.org"));
+  } catch { return false; }
+}
+
 /** Download one file from an archive item onto the shelf. Zips are opened and their media files added. */
 export async function archiveFetch(id: string, file: string): Promise<string[]> {
   if (!ID_OK.test(id) || !FILE_OK.test(file)) throw new Error("bad item or file name");
   const url = `https://archive.org/download/${id}/${file.split("/").map(encodeURIComponent).join("/")}`;
   const r = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(120000) });
   if (!r.ok) throw new Error(`the Internet Archive answered ${r.status} for ${file}`);
-  if (!new URL(r.url).hostname.endsWith("archive.org")) throw new Error("the download was sent somewhere other than archive.org: refused");
+  if (!archiveHost(r.url)) { void r.body?.cancel(); throw new Error("the download was sent somewhere other than archive.org: refused"); }
+  const declared = Number(r.headers.get("content-length") ?? 0);
+  if (declared > MAX_DOWNLOAD) { void r.body?.cancel(); throw new Error(`that file is ${Math.round(declared / 1048576)} MB: too large to fetch (the limit is ${MAX_DOWNLOAD / 1048576} MB)`); }
   const data = new Uint8Array(await r.arrayBuffer());
+  if (data.length > MAX_DOWNLOAD) throw new Error(`that download is larger than ${MAX_DOWNLOAD / 1048576} MB: refused`);
   if (/\.zip$/i.test(file)) {
     const media = unzipMedia(data);
     if (!media.length) throw new Error("that zip has no disk, tape or cartridge images in it");

@@ -3,7 +3,7 @@
 // change as a numbered generation you can roll back to. Same idea as NixOS, native to Nix64 (no Nix
 // needed). The file is the truth: two machines with the same file are the same machine.
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { generationsDir, machineDir, machineFile, paths, storeFile, validName } from "./paths";
 
@@ -111,6 +111,14 @@ function bool(v: unknown, dflt: boolean, label: string, problems: string[]): boo
   problems.push(`${label} must be true or false`);
   return dflt;
 }
+/** VICE only takes these REU sizes (in KB): anything else makes the engine exit at start-up. */
+const REU_SIZES = [128, 256, 512, 1024, 2048, 4096, 8192, 16384];
+function reuSize(v: unknown, problems: string[]): number {
+  if (v === undefined) return 512;
+  if (typeof v === "number" && REU_SIZES.includes(v)) return v;
+  problems.push(`devices.reu.size must be one of ${REU_SIZES.join(", ")} (KB)`);
+  return 512;
+}
 function int(v: unknown, dflt: number, min: number, max: number, label: string, problems: string[]): number {
   if (v === undefined) return dflt;
   if (typeof v === "number" && Number.isInteger(v) && v >= min && v <= max) return v;
@@ -187,7 +195,14 @@ export function evaluate(text: string, expectName?: string, pin = false): Machin
       mode,
       true_drive: bool(d.true_drive, true, `drive.${s}.true_drive`, problems),
     };
-    if (mode === "image") def.image = resolveMedia(d.image, `drive.${s}.image`, problems, pin);
+    if (mode === "image") {
+      def.image = resolveMedia(d.image, `drive.${s}.image`, problems, pin);
+      // A 1581 reads .d81 disks and every other drive reads .d64/.d71; the engine attaches the wrong kind without a word.
+      if (def.type === "1581" && !d.image) problems.push(`drive.${s}: a 1581 reads .d81 disks and Nix64 cannot make a blank one yet. Put a .d81 on your shelf and set image = "shelf:NAME.d81", or pick another drive type`);
+      const ext = def.image && /\.(d64|d71|d81|g64)$/i.exec(def.image.name)?.[1].toLowerCase();
+      if (ext && def.type === "1581" && ext !== "d81") problems.push(`drive.${s}: a 1581 cannot read a .${ext} disk (it needs a .d81)`);
+      if (ext === "d81" && def.type !== "1581") problems.push(`drive.${s}: a .d81 disk needs a 1581 drive, not a ${def.type}`);
+    }
     if (mode === "folder") {
       if (typeof d.folder === "string" && d.folder) def.folder = isAbsolute(d.folder) ? d.folder : join(paths.projects, d.folder);
       else problems.push(`drive.${s}.folder is required when mode = "folder"`);
@@ -208,7 +223,7 @@ export function evaluate(text: string, expectName?: string, pin = false): Machin
     tape: { image: resolveMedia(tape.image, "tape.image", problems, pin) },
     cartridge: { image: resolveMedia(cart.image, "cartridge.image", problems, pin) },
     devices: {
-      reu: { enabled: bool(reu.enabled, false, "devices.reu.enabled", problems), size: int(reu.size, 512, 128, 16384, "devices.reu.size", problems) },
+      reu: { enabled: bool(reu.enabled, false, "devices.reu.enabled", problems), size: reuSize(reu.size, problems) },
       wic64: bool(devices.wic64, false, "devices.wic64", problems),
       modem: {
         enabled: bool(modem.enabled, false, "devices.modem.enabled", problems),
@@ -258,14 +273,19 @@ export function currentGeneration(name: string): number {
 /** Evaluate the machine's file and, if it differs from the current generation, record a new one. */
 export function switchMachine(name: string): { gen: Generation; changed: boolean } {
   const text = readFileSync(machineFile(name), "utf8");
-  const def = evaluate(text, name, true);
-  const hash = hashOf(def);
   const all = listGenerations(name);
   const cur = all.find((g) => g.n === currentGeneration(name));
+  // Right after a rollback the file IS that generation's text. Do not re-pin whatever the shelf holds today under the same name:
+  // that would make a new generation with a different SHA-256 and lose the pin the rollback was meant to bring back.
+  const rolled = join(generationsDir(name), "rolled");
+  if (cur && existsSync(rolled) && readFileSync(rolled, "utf8").trim() === String(cur.n) && cur.source === text) return { gen: cur, changed: false };
+  const def = evaluate(text, name, true);
+  const hash = hashOf(def);
   if (cur && cur.hash === hash) return { gen: cur, changed: false };
   const n = (all.at(-1)?.n ?? 0) + 1;
   const gen: Generation = { n, time: new Date().toISOString(), hash, source: text, def };
   mkdirSync(generationsDir(name), { recursive: true });
+  rmSync(rolled, { force: true });
   writeFileSync(join(generationsDir(name), `${n}.json`), JSON.stringify(gen, null, 1));
   writeFileSync(join(generationsDir(name), "current"), String(n));
   return { gen, changed: true };
@@ -277,6 +297,7 @@ export function rollback(name: string, n: number): Generation {
   if (!gen) throw new Error(`${name} has no generation ${n}`);
   writeFileSync(machineFile(name), gen.source);
   writeFileSync(join(generationsDir(name), "current"), String(n));
+  writeFileSync(join(generationsDir(name), "rolled"), String(n)); // see switchMachine
   return gen;
 }
 

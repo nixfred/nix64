@@ -87,11 +87,12 @@ export class Machine {
   snapshot(): Snapshot {
     const buf = Buffer.alloc(TEL_V1_SIZE);
     for (let tries = 0; ; tries++) {
-      readSync(this.fd, buf, 0, 24, 0);
-      const s1 = buf.readUInt32LE(16);
+      readSync(this.fd, buf, 0, TEL_V1_SIZE, 0);
+      const s1 = buf.readUInt32LE(16); // the sequence word as it was when this copy began
       if (!(s1 & 1)) {
-        readSync(this.fd, buf, 0, TEL_V1_SIZE, 0);
-        if (buf.readUInt32LE(16) === s1) {
+        const again = Buffer.alloc(4);
+        readSync(this.fd, again, 0, 4, 16); // read it FRESH after the copy: if the writer started meanwhile, it has moved
+        if (again.readUInt32LE(0) === s1) {
           return {
             frame: buf.readUInt32LE(20),
             vic: Buffer.from(buf.subarray(32, 96)),

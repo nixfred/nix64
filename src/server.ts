@@ -16,7 +16,9 @@ import { machineFile, paths, statePath, ensureDirs } from "./paths";
 import { loadSettings, saveSettings, type Settings } from "./settings";
 import { reset as monitorReset } from "./monitor";
 
-export type ClientData = { id: number; subs: Map<string, { minMs: number; last: number; force: boolean }> };
+/** One window's subscription to one machine's picture. `frame` is the last frame this window was looked at for, `seq` the picture it last received. */
+export type Sub = { minMs: number; last: number; force: boolean; frame: number; seq: number };
+export type ClientData = { id: number; subs: Map<string, Sub> };
 type Handler = (hub: Hub, req: Request, m: RegExpMatchArray, url: URL) => Promise<Response> | Response;
 export type Route = [method: string, pattern: RegExp, handler: Handler];
 
@@ -161,7 +163,7 @@ export class Hub {
       const want: ServerWebSocket<ClientData>[] = [];
       for (const ws of this.clients) {
         const sub = ws.data.subs.get(name);
-        if (sub && (sub.force || (f !== live.lastPicture?.frame && now - sub.last >= sub.minMs))) want.push(ws);
+        if (sub && (sub.force || (f !== sub.frame && now - sub.last >= sub.minMs))) want.push(ws);
       }
       if (!want.length) continue;
       let pic;
@@ -171,12 +173,17 @@ export class Hub {
       const same = live.lastPicture && live.lastPicture.w === pic.width && live.lastPicture.h === pic.height
         && Buffer.compare(live.lastPicture.pix, buf.subarray(64)) === 0 && Buffer.compare(live.lastPicture.pal, buf.subarray(16, 64)) === 0;
       live.lastPicture = { frame: f, w: pic.width, h: pic.height, pal: Buffer.from(buf.subarray(16, 64)), pix: Buffer.from(buf.subarray(64)) };
+      if (!same) live.picSeq++;
       for (const ws of want) {
         const sub = ws.data.subs.get(name)!;
-        if (same && !sub.force) { sub.last = now; continue; } // nothing changed on screen: send nothing
+        // "nothing changed" is judged per window: a slow window that has not yet been sent the newest picture still gets it,
+        // even if a faster window was sent it a moment ago (otherwise it would show a stale screen for good once the picture went still)
+        if (sub.seq === live.picSeq && !sub.force) { sub.last = now; sub.frame = f; continue; }
         if (ws.getBufferedAmount() > 1_500_000) continue; // a slow window: skip frames rather than queue them
         sub.force = false;
         sub.last = now;
+        sub.frame = f;
+        sub.seq = live.picSeq;
         ws.send(buf);
       }
     }
@@ -251,7 +258,9 @@ export class Hub {
     }
 
     // static UI
-    let rel = normalize(decodeURIComponent(url.pathname)).replace(/^\/+/, "");
+    let decoded: string;
+    try { decoded = decodeURIComponent(url.pathname); } catch { return new Response("bad request", { status: 400 }); }
+    let rel = normalize(decoded).replace(/^\/+/, "");
     if (rel === "" || rel.endsWith("/")) rel += "index.html";
     const file = join(UI_DIR, rel);
     if (!file.startsWith(UI_DIR) || !existsSync(file) || !statSync(file).isFile()) return new Response("not found", { status: 404 });
@@ -264,14 +273,15 @@ export class Hub {
     if (typeof raw !== "string") return;
     let msg: Record<string, any>;
     try { msg = JSON.parse(raw); } catch { return; }
+    if (!msg || typeof msg !== "object" || Array.isArray(msg)) return; // "null", a number or a list is not a message
     const live = typeof msg.name === "string" ? this.lives.get(msg.name) : undefined;
     switch (msg.t) {
       case "sub": {
-        const next = new Map<string, { minMs: number; last: number; force: boolean }>();
+        const next = new Map<string, Sub>();
         for (const [name, fps] of Object.entries((msg.subs ?? {}) as Record<string, number>)) {
           if (!this.lives.has(name)) continue;
           const old = ws.data.subs.get(name);
-          next.set(name, { minMs: 1000 / Math.max(1, Math.min(60, Number(fps) || 60)), last: 0, force: !old });
+          next.set(name, { minMs: 1000 / Math.max(1, Math.min(60, Number(fps) || 60)), last: 0, force: !old, frame: old?.frame ?? -1, seq: old?.seq ?? -1 });
           if (!old) for (const f of this.onSub) f(ws, name);
         }
         ws.data.subs = next;

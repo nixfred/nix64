@@ -178,5 +178,10 @@ export async function textMonitor(port: number, commands: string[], timeoutMs = 
 }
 
 const quote = (p: string) => `"${p.replaceAll('"', "")}"`;
-export const attach = (port: number, file: string, device: number) => textMonitor(port, [`attach ${quote(file)} ${device}`]);
+/** Attach a file to a device. The engine answers "Failed." in plain text when it cannot (a damaged or wrong-kind image): say so, do not report success. */
+export async function attach(port: number, file: string, device: number): Promise<string> {
+  const out = await textMonitor(port, [`attach ${quote(file)} ${device}`]);
+  if (/\bfailed\b/i.test(out)) throw new Error(`the engine could not attach ${file.split("/").pop()} to device ${device}: ${out.replace(/\(C:\$[0-9a-f]+\)/gi, "").trim().slice(0, 200)}`);
+  return out;
+}
 export const detach = (port: number, device: number) => textMonitor(port, [`detach ${device}`]);

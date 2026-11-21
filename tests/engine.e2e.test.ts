@@ -136,6 +136,13 @@ suite("a machine from a file", () => {
     expect(text).not.toMatch(/BCDEF|FGHIJ|KLMNO/); // the queued letters were thrown away, not delivered after the break
   }, 40000);
 
+  test("attaching something the engine cannot read is an error, not a silent success", async () => {
+    const junk = join(home, "junk.d64");
+    writeFileSync(junk, Buffer.from("this is not a disk image"));
+    await expect(attach(st.monitorPort, junk, 8)).rejects.toThrow(/could not attach/);
+    await detach(st.monitorPort, 8).catch(() => {});
+  }, 20000);
+
   test("a snapshot restores the machine as it was", async () => {
     const zebras = () => m.screen().filter((r) => r.includes("ZEBRA42")).length;
     await m.type("NEW\n");

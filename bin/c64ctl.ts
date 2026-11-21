@@ -33,10 +33,16 @@ for (let i = 0; i < argv.length; i++) {
   } else pos.push(a);
 }
 const cmd = pos.shift();
-const num = (name: string, dflt: number) => (flags.has(name) ? Number(flags.get(name)) : dflt);
 const fail = (msg: string, code = 1): never => {
   console.error(`c64ctl: ${msg}`);
   process.exit(code);
+};
+/** A numeric option. "30s", "abc", 0 or a negative number is an error, not a silent NaN (which made `wait` hang and typing unpaced). */
+const num = (name: string, dflt: number) => {
+  if (!flags.has(name)) return dflt;
+  const raw = String(flags.get(name)), v = Number(raw);
+  if (raw.trim() === "" || !Number.isFinite(v) || v <= 0) fail(`--${name} needs a positive number, got "${raw}"`, 2);
+  return v;
 };
 
 const HELP = `c64ctl <command> [options]
@@ -59,7 +65,7 @@ try {
 }
 
 const fps = Number(process.env.NIX64_FPS ?? 60);
-const framesPerKey = flags.has("frames-per-key") ? num("frames-per-key", 2) : Math.max(1, Math.round(fps / num("cps", Number(process.env.NIX64_CPS ?? 30))));
+const framesPerKey = flags.has("frames-per-key") ? num("frames-per-key", 2) : Math.max(1, Math.round((Number.isFinite(fps) && fps > 0 ? fps : 60) / num("cps", Number(process.env.NIX64_CPS) > 0 ? Number(process.env.NIX64_CPS) : 30)));
 
 function fence(rows: string[]): string {
   const body = rows.map((r) => r.padEnd(40)).join("\n");

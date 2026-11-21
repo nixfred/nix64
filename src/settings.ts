@@ -59,14 +59,24 @@ function merge<T>(base: T, patch: unknown): T {
 
 export function loadSettings(): Settings {
   try {
-    return merge(DEFAULTS, JSON.parse(readFileSync(file(), "utf8")));
+    return sane(merge(DEFAULTS, JSON.parse(readFileSync(file(), "utf8"))));
   } catch {
     return structuredClone(DEFAULTS);
   }
 }
 
+/** Settings the UI offers as a list must be one of the list: a stray string (a bad PUT) would match no mode and silently turn the assistant off. */
+function sane(next: Settings): Settings {
+  if (!["auto", "on", "off"].includes(next.display.reducedMotion)) next.display.reducedMotion = DEFAULTS.display.reducedMotion;
+  if (!["eager", "quiet", "off"].includes(next.agent.assist)) next.agent.assist = DEFAULTS.agent.assist;
+  if (!["auto", "claude", "codex", "pi", "opencode", "crush"].includes(next.agent.choice)) next.agent.choice = DEFAULTS.agent.choice;
+  const ep = next.agent.localEndpoint.trim();
+  try { next.agent.localEndpoint = ep && /^https?:$/.test(new URL(ep).protocol) ? ep : ""; } catch { next.agent.localEndpoint = ""; }
+  return next;
+}
+
 export function saveSettings(patch: unknown): Settings {
-  const next = merge(loadSettings(), patch);
+  const next = sane(merge(loadSettings(), patch));
   next.agent.typingSpeed = Math.min(120, Math.max(5, Math.round(next.agent.typingSpeed)));
   next.display.scale = Math.min(200, Math.max(70, Math.round(next.display.scale)));
   next.display.crtStrength = Math.min(100, Math.max(0, Math.round(next.display.crtStrength)));

@@ -20,6 +20,8 @@ export class Live {
   readonly machine: Machine;
   readonly keyboard: HostKeyboard;
   lastFrame = 0;
+  /** Counts picture changes, so each window can tell whether it already has the newest one. */
+  picSeq = 0;
   lastPicture?: { frame: number; w: number; h: number; pal: Buffer; pix: Buffer };
   fps = 0;
   warp = false;

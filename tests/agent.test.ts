@@ -1,7 +1,7 @@
 // What the agent's words and calls mean, and the free local rules: no engine, no network, no model.
 // Run: bun test tests/agent.test.ts
 import { describe, expect, test } from "bun:test";
-import { describeCall, words } from "../src/agent";
+import { describeCall, splitCommands, words } from "../src/agent";
 import { DIALECT, dialectHint } from "../src/dialect";
 import { keysForChar } from "../src/hostkeys";
 
@@ -63,5 +63,20 @@ describe("which keys to light for a character", () => {
   test("what the C64 keyboard cannot type is null", () => {
     expect(keysForChar("é")).toBeNull();
     expect(keysForChar("{")).toBeNull();
+  });
+});
+
+describe("the feed reads a shell line the way the shell does (2026-11-21 sweep)", () => {
+  test("a semicolon inside quotes is part of the BASIC line, not a second command", () => {
+    expect(splitCommands(`bun c64ctl.ts line 'PRINT "A";B'`)).toEqual([`bun c64ctl.ts line 'PRINT "A";B'`]);
+    const d = describeCall(`bun /o/c64ctl.ts --path /r.shm line '10 PRINT CHR$(19);CHR$(17)'`);
+    expect(d.length).toBe(1);
+    expect(d[0].kind).toBe("machine");
+    expect(d[0].text).toContain("CHR$(19);CHR$(17)");
+  });
+  test("real chaining outside quotes is still split and still flagged", () => {
+    expect(splitCommands("a && b ; c || d | e & f")).toEqual(["a", "b", "c", "d", "e", "f"]);
+    const d = describeCall("bun /o/c64ctl.ts screen; rm -rf ~");
+    expect(d.map((x) => x.kind)).toEqual(["note", "host"]);
   });
 });

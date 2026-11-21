@@ -41,7 +41,11 @@ export async function insertDisk(name: string, slotStr: string, src: { shelf?: s
   const st = readState(name), work = diskPath(name, slot);
   let data: Buffer, label: string;
   if (src.blank !== undefined) { label = (src.blank || "BLANK").toUpperCase().slice(0, 16); data = createD64(label, "64"); }
-  else { const p = shelfPath(src.shelf ?? ""); label = src.shelf!; data = readFileSync(p); }
+  else {
+    const p = shelfPath(src.shelf ?? ""); label = src.shelf!;
+    if (kindOf(label) !== "disk") throw new Error(`${label} is not a disk image (tapes and cartridges have their own slots)`);
+    data = readFileSync(p);
+  }
   if (st) await detach(st.monitorPort, Number(slot));
   mkdirSync(join(machineDir(name), "disks"), { recursive: true });
   archiveDisk(name, slot);

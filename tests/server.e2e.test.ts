@@ -142,4 +142,46 @@ suite("the shell server", () => {
     expect(good.gen).toBe(2);
     expect(good.note).toContain("Restart");
   });
+
+  test("a bad address is a 400, and a WebSocket message that is not an object is ignored (2026-11-21 sweep)", async () => {
+    expect((await api("/%zz")).status).toBe(400);
+    ws.send("null"); ws.send("5"); ws.send("[1]");
+    await Bun.sleep(200);
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+    const before = texts.length;
+    send({ t: "sub", subs: { srv: 30 } });
+    expect(await until(() => texts.length > before)).toBe(true); // the server still answers
+  });
+
+  test("a settings value outside its list, or an endpoint that is not http(s), is put back to the default", async () => {
+    const r = await (await api("/api/settings", { method: "PUT", body: JSON.stringify({ agent: { assist: "x", choice: "???", localEndpoint: "javascript:alert(1)" }, display: { reducedMotion: "zz" } }) })).json() as any;
+    expect(r.agent.assist).toBe("eager");
+    expect(r.agent.choice).toBe("auto");
+    expect(r.agent.localEndpoint).toBe("");
+    expect(r.display.reducedMotion).toBe("auto");
+    const ok = await (await api("/api/settings", { method: "PUT", body: JSON.stringify({ agent: { assist: "quiet", localEndpoint: "http://127.0.0.1:11434" } }) })).json() as any;
+    expect(ok.agent.assist).toBe("quiet");
+    expect(ok.agent.localEndpoint).toBe("http://127.0.0.1:11434");
+    await api("/api/settings", { method: "PUT", body: JSON.stringify({ agent: { assist: "eager", localEndpoint: "" } }) });
+  });
+
+  test("a slow window still ends up with the newest picture when a fast window is also watching", async () => {
+    const m = hub.lives.get("srv")!.machine;
+    const port = new URL(base).port;
+    const slowFrames: Buffer[] = [];
+    const slow = new WebSocket(`ws://127.0.0.1:${port}/ws`, { headers: { cookie, origin: base } } as any);
+    slow.binaryType = "nodebuffer" as any;
+    slow.onmessage = (e) => { if (typeof e.data !== "string") slowFrames.push(Buffer.from(e.data as ArrayBuffer)); };
+    await new Promise<void>((res, rej) => { slow.onopen = () => res(); slow.onerror = () => rej(new Error("ws failed")); });
+    slow.send(JSON.stringify({ t: "sub", subs: { srv: 2 } })); // 2 pictures a second, while the other window takes 30
+    await Bun.sleep(1200);
+    // a program that holds the picture perfectly still (a running program shows no blinking cursor), with a new border colour
+    for (const line of ["POKE 53280,2", "10 GOTO 10", "RUN"]) await m.type(line + "\n");
+    await Bun.sleep(4000);
+    const px = (b?: Buffer) => b ? Buffer.from(b.subarray(64)).toString("base64") : "";
+    const fast = px(frames.at(-1)), slowest = px(slowFrames.at(-1));
+    slow.close();
+    expect(fast).not.toBe("");
+    expect(slowest).toBe(fast); // the slow window shows the same picture, not one from before the colour change
+  }, 30000);
 });

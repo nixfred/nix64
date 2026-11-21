@@ -35,10 +35,25 @@ export function words(cmd: string): string[] {
   return out;
 }
 
+/** Split a shell line into its commands at && ; || | & and newlines, but never inside quotes: `line 'PRINT "A";B'` is ONE command. */
+export function splitCommands(cmd: string): string[] {
+  const out: string[] = [];
+  let cur = "", q = "";
+  for (let i = 0; i < cmd.length; i++) {
+    const c = cmd[i];
+    if (q) { cur += c; if (c === q) q = ""; else if (c === "\\" && q === '"' && i + 1 < cmd.length) cur += cmd[++i]; continue; }
+    if (c === "'" || c === '"') { q = c; cur += c; continue; }
+    if (c === ";" || c === "\n" || c === "|" || c === "&") { out.push(cur); cur = ""; if ((c === "|" || c === "&") && cmd[i + 1] === c) i++; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  return out.map((x) => x.trim()).filter(Boolean);
+}
+
 /** What a Bash call from the agent means, in words for the feed. c64ctl calls are on the machine; the rest are not allowed. */
 export function describeCall(command: string): { kind: "machine" | "note" | "host"; text: string; via?: string }[] {
   const out: { kind: "machine" | "note" | "host"; text: string; via?: string }[] = [];
-  for (const part of command.split(/\s*(?:&&|;|\|\|)\s*/)) {
+  for (const part of splitCommands(command)) {
     const w = words(part.trim());
     const i = w.findIndex((x) => x.endsWith("c64ctl.ts") || x === "c64ctl");
     if (i < 0) { if (part.trim()) out.push({ kind: "host", text: `Tried to run \`${part.trim().slice(0, 100)}\`, which is not allowed here.` }); continue; }
@@ -111,7 +126,7 @@ export function attachAgent(hub: Hub): void {
   });
   hub.wsExtra.push((_ws, msg, live) => {
     if (!live) return;
-    if (msg.t === "card") void onCard(live, String(msg.id), String(msg.action));
+    if (msg.t === "card") onCard(live, String(msg.id), String(msg.action)).catch((e) => live.say("error", (e as Error).message)); // the user sees why a card button did nothing
   });
 
   async function onCard(live: Live, id: string, action: string): Promise<void> {
@@ -196,7 +211,8 @@ export function attachAgent(hub: Hub): void {
         live.say("error", (e as Error).message);
       } finally {
         clearTimeout(cap);
-        runs.delete(live.name);
+        try { proc.kill(); } catch { /* already gone */ } // a parser error must not leave the agent typing with nothing able to stop it
+        if (runs.get(live.name) === run) runs.delete(live.name); // a late exit of an old run must not remove a newer run
         live.keyboard.releaseAll();
         live.say("note", run.killed ? "The agent was stopped." : `The agent finished (${Math.round((Date.now() - run.started) / 1000)} s).`);
         announce(live.name);
@@ -240,8 +256,12 @@ export function attachAgent(hub: Hub): void {
           pending.delete(b.tool_use_id);
           if (b.is_error) {
             const why = String(Array.isArray(b.content) ? b.content.map((x: any) => x.text ?? "").join(" ") : b.content ?? "the command failed").replace(/\s+/g, " ");
-            live.say("host", p?.name === "Bash" ? `Refused, so nothing happened on the machine: \`${p.command.slice(0, 120)}\`${p.calls.some((c) => c.kind === "host") ? " (it ran something other than c64ctl)" : " (a command may only be one c64ctl call, nothing chained to it)"}.` : `Refused: the agent asked to use ${p?.name ?? "a tool"}, which it does not have here.`);
-            if (!/permission|denied|not allowed/i.test(why)) live.say("error", why.slice(0, 240));
+            if (/permission|denied|not allowed|requires approval|was blocked/i.test(why)) {
+              live.say("host", p?.name === "Bash" ? `Refused, so nothing happened on the machine: \`${p.command.slice(0, 120)}\`${p.calls.some((c) => c.kind === "host") ? " (it ran something other than c64ctl)" : " (a command may only be one c64ctl call, nothing chained onto it)"}.` : `Refused: ${p?.name ?? "a tool"} is not available to the agent here.`);
+            } else {
+              // it was allowed and ran, and then failed (a wait that timed out, a bad key name, a type that stopped part way): some keys may already be typed
+              live.say("error", `${p?.name === "Bash" ? "A c64ctl call failed" : `${p?.name ?? "A tool"} failed`}: ${why.slice(0, 240)}${p?.calls.some((c) => c.kind === "machine") ? " (anything it typed before the failure is on the screen)" : ""}`);
+            }
           } else if (p) for (const d of p.calls) live.say(d.kind, d.text, d.via);
         }
       } else if (ev.type === "result" && ev.is_error) live.say("error", String(ev.result ?? "the agent reported an error").slice(0, 300));
