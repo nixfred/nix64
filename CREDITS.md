@@ -12,5 +12,5 @@ Everyone who touched this, in plain words.
   https://github.com/MaverickKB/omarchy-chuck-yeager-nix64 (MIT)
 
 Hardware and software projects Nix64 builds on or talks to will be added here as they are
-integrated: OpenCBM, ZoomFloppy/XUM1541, USBSID-Pico, WiC64, libsidplayfp, CCGMS, and the
+integrated: the High Voltage SID Collection and the PSID file format (the SID jukebox reads their files), OpenCBM, ZoomFloppy/XUM1541, USBSID-Pico, WiC64, libsidplayfp, CCGMS, and the
 BBS operators who keep their boards online.

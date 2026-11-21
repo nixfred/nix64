@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writ
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Browser } from "./cdp";
+import { toneSid } from "../sidfixture";
 
 const out = process.argv[2] ?? "/tmp/nix64-features";
 mkdirSync(out, { recursive: true });
@@ -16,6 +17,7 @@ const { createHub } = await import("../../src/server");
 const { createMachine } = await import("../../src/machinefile");
 const { startMachine, stopMachine } = await import("../../src/engine");
 const { ensureDirs, paths } = await import("../../src/paths");
+const { addToShelf } = await import("../../src/shelf");
 
 ensureDirs();
 const hub = await createHub();
@@ -109,6 +111,34 @@ try {
   // a shader that cannot be used: plain 2D drawing, on a canvas that is really on the page
   const fb = await page.eval<boolean>(`(() => { const c = document.createElement('canvas'); c.width = 64; c.height = 48; document.body.appendChild(c); const t = new (window.__tube.constructor)(c); t.fallback(); const pal = new Uint8Array(48); pal[3] = 255; t.frame(new Uint8Array(16).fill(1), pal, 4, 4); const d = t.canvas.getContext('2d').getImageData(1, 1, 1, 1).data; const ok = t.canvas !== c && t.canvas.isConnected && d[0] === 255; t.canvas.remove(); return ok; })()`);
   check(fb === true, "without a shader the tube draws plain pixels on a canvas that is on the page");
+  // the SID jukebox: a tune on the shelf shows up, Play asks before it throws a program away, and the tune really runs
+  addToShelf("tone.sid", toneSid(2));
+  await page.eval(`window.__S.shelf = [...window.__S.shelf.filter((i) => i.name !== 'tone.sid'), ${JSON.stringify({ name: "tone.sid", kind: "sid", size: 1, sha: "x", title: "Nix64 test tone", mtime: 0, sid: { songs: 2, startSong: 1, title: "Nix64 test tone", author: "Larry (Claude)", released: "2026", clock: "pal", model: "6581" } })}]; document.querySelector('[data-tab=sid]').click()`);
+  await Bun.sleep(600);
+  const row = await page.eval<string>(`document.getElementById('sid-list').innerText`);
+  check(/Nix64 test tone/.test(row) && /2 songs/.test(row), "the SID tab lists the tune with its details", row.replace(/\n/g, " | ").slice(0, 90));
+  await page.eval(`document.querySelector('[data-act=sid-song]').click()`); // song 2
+  await Bun.sleep(200);
+  await page.eval(`document.querySelector('[data-act=sid-play]').click()`);
+  await Bun.sleep(1200);
+  const asked = await page.eval<boolean>(`!!document.querySelector('[data-act=sid-force]')`);
+  check(asked, "Play asks first because a BASIC program is in memory (the sprite test left one)");
+  await page.eval(`document.querySelector('[data-act=sid-force]').click()`);
+  await Bun.sleep(2500);
+  const ram = live.machine.snapshot().ram;
+  const c1 = ram[0x1102] | (ram[0x1103] << 8);
+  await Bun.sleep(1000);
+  const ram2 = live.machine.snapshot().ram;
+  const c2 = ram2[0x1102] | (ram2[0x1103] << 8);
+  const gain = (c2 - c1 + 65536) % 65536;
+  check(gain > 30 && ram2[0x314] === 0x40, "the tune runs: its play routine is called every frame", `${gain} calls in a second`);
+  const shown = await page.eval<string>(`document.getElementById('dtabs') && document.querySelector('#dock-body, .dock-body, #dockbody')?.innerText || document.body.innerText`);
+  check(/playing/i.test(shown) && /song 2 of 2/.test(shown), "the pane says what is playing", "song 2 of 2");
+  await page.shot(join(out, "sid.png"));
+  await page.eval(`document.querySelector('[data-act=sid-stop]').click()`);
+  await Bun.sleep(2500);
+  const ram3 = live.machine.snapshot().ram;
+  check(ram3[0x314] === 0x31 && ram3[0x315] === 0xea, "Stop puts the KERNAL interrupt back");
   console.log("page errors:", page.errors.slice(0, 4));
 } finally {
   b.close();

@@ -7,7 +7,10 @@ import { join } from "node:path";
 import { createD64, readDir, type DiskDir } from "./d64";
 import { archiveDisk, diskHistory, diskPath, readState, restoreDisk } from "./engine";
 import { SLOTS, evaluate, type MachineDef } from "./machinefile";
-import { attach, detach, loadSnapshot, saveSnapshot, autostart } from "./monitor";
+import { Machine } from "./machine";
+import { attach, detach, loadSnapshot, saveSnapshot, autostart, reset, writeMemory } from "./monitor";
+import { parseSid, type SidInfo } from "./psid";
+import { planSid } from "./sidplayer";
 import { machineDir, machineFile, paths, storeFile } from "./paths";
 import { addToShelf, kindOf, shelfPath } from "./shelf";
 
@@ -138,6 +141,55 @@ export async function autostartPrg(name: string, shelfName: string): Promise<voi
   const st = readState(name);
   if (!st) throw new Error("switch the machine on first");
   await autostart(st.binaryPort, shelfPath(shelfName), true);
+}
+
+/** What a started tune is, for the shell: the file's own header plus which song is playing. */
+export type NowPlaying = SidInfo & { shelf: string; song: number; started: number; warnings: string[] };
+
+/**
+ * Play a tune from the shelf on this machine's own SID chip: the machine is reset (the tune takes the machine, as on a real C64,
+ * so whatever BASIC program was in memory is gone), the tune and a small driver of Nix64's own are written into RAM, and the
+ * driver calls the tune's init once and its play routine every frame. Every note is the tune's own 6502 code writing to the chip.
+ */
+export async function playSid(name: string, shelfName: string, song?: number): Promise<NowPlaying> {
+  const st = readState(name);
+  if (!st) throw new Error("switch the machine on first");
+  if (kindOf(shelfName) !== "sid") throw new Error(`${shelfName} is not a SID tune`);
+  const data = readFileSync(shelfPath(shelfName));
+  const info = parseSid(data);
+  const n = song ?? info.startSong;
+  if (!Number.isInteger(n) || n < 1 || n > info.songs) throw new Error(`${shelfName} has songs 1 to ${info.songs}, not ${n}`);
+  const def = loadDef(name);
+  const plan = planSid(data, n, def.region === "pal" ? "pal" : "ntsc"); // refuses what it cannot play, before the machine is touched
+  const warnings: string[] = [...plan.warnings];
+  if (info.clock === "pal" && def.region !== "pal") warnings.push("The tune was written for PAL and this machine is NTSC, so it will play too fast.");
+  if (info.clock === "ntsc" && def.region === "pal") warnings.push("The tune was written for NTSC and this machine is PAL, so it will play too slow.");
+  if ((info.model === "6581" || info.model === "8580") && info.model !== def.sid.model) warnings.push(`The tune was written for the ${info.model} and this machine has a ${def.sid.model}: it will sound different (set sid.model in the machine file).`);
+  await reset(st.binaryPort, false);
+  const m = Machine.open(st.shm);
+  try {
+    if (!(await m.waitForText("READY.", 15000))) throw new Error("the machine did not come back to READY. after the reset");
+    await silence(st.binaryPort);
+    for (const w of plan.writes) await writeMemory(st.binaryPort, w.addr, w.data);
+  } finally {
+    m.close();
+  }
+  return { ...info, shelf: shelfName, song: n, started: Date.now(), warnings };
+}
+
+/** Every SID register to zero: no voice gated, volume off. (A reset does not clear a tune's last notes off the chip.) */
+async function silence(port: number): Promise<void> {
+  await writeMemory(port, 0xd400, Buffer.alloc(25));
+}
+
+/** Stop the tune: a soft reset puts the KERNAL's own interrupt back, and the chip is told to be quiet. */
+export async function stopSid(name: string): Promise<void> {
+  const st = readState(name);
+  if (!st) throw new Error("switch the machine on first");
+  await reset(st.binaryPort, false);
+  const m = Machine.open(st.shm);
+  try { await m.waitForText("READY.", 15000); } finally { m.close(); }
+  await silence(st.binaryPort);
 }
 
 export { paths, storeFile };

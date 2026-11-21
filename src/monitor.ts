@@ -11,7 +11,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // ---------- the binary monitor ----------
 
-const CMD = { AUTOSTART: 0xdd, DUMP: 0x41, UNDUMP: 0x42, RESOURCE_GET: 0x51, RESOURCE_SET: 0x52, PING: 0x81, EXIT: 0xaa, RESET: 0xcc } as const;
+const CMD = { MEM_SET: 0x02, AUTOSTART: 0xdd, DUMP: 0x41, UNDUMP: 0x42, RESOURCE_GET: 0x51, RESOURCE_SET: 0x52, PING: 0x81, EXIT: 0xaa, RESET: 0xcc } as const;
 const ERRORS: Record<number, string> = { 0x01: "object missing", 0x02: "invalid memspace", 0x80: "command length is wrong", 0x81: "invalid parameter", 0x82: "API version not supported", 0x83: "unknown command", 0x8f: "command failed" };
 
 type Reply = { type: number; error: number; body: Buffer };
@@ -106,6 +106,20 @@ export function getResource(port: number, name: string): Promise<string | number
     const r = await c.request(CMD.RESOURCE_GET, str(name));
     // body: type u8, length u8, value (a string, or a little-endian int)
     return r.body[0] === 0 ? r.body.subarray(2, 2 + r.body[1]).toString() : r.body.readInt32LE(2);
+  });
+}
+
+/** Write bytes into the machine's memory as the CPU sees it (RAM where RAM is visible, the chips where I/O is). The machine is paused while it happens. */
+export function writeMemory(port: number, addr: number, data: Uint8Array): Promise<void> {
+  if (!data.length || addr < 0 || addr + data.length > 0x10000) return Promise.reject(new Error(`cannot write ${data.length} bytes at $${addr.toString(16)}`));
+  return withBinary(port, async (c) => {
+    const head = Buffer.alloc(8);
+    head[0] = 1; // with side effects: writing a chip register reaches the chip
+    head.writeUInt16LE(addr, 1);
+    head.writeUInt16LE(addr + data.length - 1, 3);
+    head[5] = 0; // main memory
+    head.writeUInt16LE(0, 6); // the CPU's own view of it
+    await c.request(CMD.MEM_SET, Buffer.concat([head, Buffer.from(data)]));
   });
 }
 

@@ -216,7 +216,7 @@ All integers are little-endian. To read a consistent snapshot: read `seq`, retry
 
 Nix64 never shows something as working that was not tested. This is the honest state.
 
-**Built and tested** (156 automated tests: 152 run by default and pass on the dev build and against the installed engine on two real machines; 4 more are opt-in because they spend model usage, and passed when run):
+**Built and tested** (175 automated tests: 166 run by default and pass on the dev build and against the installed engine on two real machines; 9 more are opt-in: 4 because they spend model usage, and 5 that record real audio and need the SDL engine, which passed on gus):
 
 - the shell: CRT, bezel, Hub, on-screen keyboard, symbolic host keyboard, joystick keys and gamepad, paste
 - machine files, generations and rollback, pinned media, presets, headless machines
@@ -224,11 +224,24 @@ Nix64 never shows something as working that was not tested. This is the honest s
 - the shelf, drag and drop, and the Internet Archive search and fetch (only when you ask)
 - assist (local rules, Do it for me, Guide me) and drive mode with a real agent, and STOP
 - tools that read real memory: hex view, sprites, charset, cheat finder, captures (PNG and video)
+- the SID jukebox: `.sid` tunes on your shelf play on the machine's own SID chip (details below)
 - settings (look, sound, agent), the manual, credits, the READY. theme, accessibility switches
 
-**Not built yet:** the SID jukebox, printer to PDF, the sprite and charset *editors* (the viewers read live), the
+**Not built yet:** SID level meters and tunes that live under the ROMs, printer to PDF, the sprite and charset *editors* (the viewers read live), the
 BBS phone book, datasette controls and counter, a debugger with CPU registers and breakpoints, the Omarchy shell
 plugin (bar widget), cheat *freezing* (the finder types POKEs once), assembling on the C64 itself.
+
+**The SID jukebox, honestly.** x64sc, VICE's C64 machine, has no SID-file support (only VICE's separate `vsid` player does), so Nix64
+plays tunes the way a real C64 did: it resets the machine, writes the tune into RAM through the monitor, and installs a 32 byte driver
+on the frame interrupt that calls the tune's own `init` once and its own `play` routine every frame. Every note is the tune's 6502
+code writing to the emulated chip. What is tested: against a real engine with VICE's register-dump sound device, a test tune made by
+this repo's own code writes 440 Hz and then 880 Hz to the chip, its play routine is called every frame (counted in RAM), refused tunes
+leave the running one alone, and Stop puts the KERNAL's interrupt back. What it plays: tunes in free RAM (`$0800`-`$9FFF`, `$C000`-`$CFFF`);
+a tune under the ROMs or I/O is refused in plain words instead of played wrongly; RSID and multi-SID tunes play with a warning; tunes that
+need the CIA timer at 60 Hz get it on a PAL machine. The audio itself was recorded from the engine's SDL build on gus with VICE's own WAV recorder
+(`tests/sid.audio.test.ts`, opt-in): song 1 measures 440 Hz, song 2 880 Hz, and after Stop the recording is silent (loudest sample 0).
+What is not tested: **nobody has listened to it by ear** (the recording proves what the engine produces, not what a speaker does), and
+no real tune from the HVSC has been tried yet. A tune takes the whole machine, so Play asks before it throws away a BASIC program.
 
 **Real hardware** (see Devices in the app): nothing has been plugged in yet, so every device says **untested**.
 A real disk drive needs the OpenCBM library (AUR); a ZoomFloppy gets a udev rule but has not been run. WiC64,
@@ -277,7 +290,7 @@ cut that runs.
 - [x] READY. theme, CRT bezel and shader, manual, UI sounds, high contrast and reduced motion
 - [ ] The telemetry measurements repeated on the windowed build with sound on a real desktop
 - [ ] Real hardware: ZoomFloppy, USB SID, Keyrah, WiC64, Ethernet: plug each in and earn its badge
-- [ ] BBS phone book with a real terminal program; Buck Rogers from the shelf; the SID jukebox; printer to PDF
+- [ ] BBS phone book with a real terminal program; Buck Rogers from the shelf; printer to PDF
 - [ ] The Omarchy shell plugin: a bar widget and a shelf, `nix64 update`
 
 ### The v1 gate

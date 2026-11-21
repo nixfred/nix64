@@ -65,7 +65,7 @@ function renderCard() {
 }
 
 const kindOf = (n) => (/\.(d64|d71|d81|g64|x64)$/i.test(n) ? "disk" : /\.(tap|t64)$/i.test(n) ? "tape" : /\.(crt|bin)$/i.test(n) ? "cart" : /\.prg$/i.test(n) ? "prg" : "file");
-const kicon = (k) => icon(({ disk: "disk", tape: "tape", cart: "cart", prg: "play", file: "file", snapshot: "snow" })[k] ?? "file");
+const kicon = (k) => icon(({ disk: "disk", tape: "tape", cart: "cart", prg: "play", sid: "music", file: "file", snapshot: "snow" })[k] ?? "file");
 
 function renderDrives() {
   const el = document.getElementById("drives"), m = machine();

@@ -2,6 +2,7 @@
 // the machine's real memory: a hex view, a sprite viewer, the charset, the cheat finder, captures.
 import { S, on, send, get, post, actions, toast, machine, esc } from "./net.js";
 import { click } from "./sounds.js";
+import { icon } from "./icons.js";
 
 const TABS = [["keys", "Keyboard"], ["memory", "Memory"], ["sprites", "Sprites"], ["charset", "Charset"], ["cheats", "Cheat finder"], ["captures", "Captures"], ["sid", "SID"], ["printer", "Printer"]];
 
@@ -202,5 +203,51 @@ async function capturesPane(body) {
 }
 
 const notBuilt = (title, why, plan) => (body) => { body.innerHTML = `<div class="col" style="padding:10px;gap:8px"><div class="row"><span class="badge-s no">not built yet</span><b>${title}</b></div><div class="dim">${why}</div><div class="faint sm">${plan}</div></div>`; };
-const sidPane = notBuilt("SID jukebox", "Playing SID music needs a SID player (libsidplayfp's sidplayfp) and the HVSC collection, and neither is wired in. The machine's own SID plays whatever a program sends it, as always.", "Planned: HVSC browser on the shelf, play through the real engine so it is the same chip you hear in games.");
+// ---------- SID jukebox ----------
+// The tunes on your shelf (.sid files). Play resets the machine and the tune's own code drives the machine's own SID chip.
+let sidPick = Object.create(null), sidAsk = null; // shelf name -> chosen song; a Play waiting for "play anyway"
+function sidPane(body) {
+  const name = S.current;
+  if (name && S.sid[name] === undefined && machine()?.running) { S.sid[name] = null; get(`/api/machines/${name}/sid`).then((r) => { S.sid[name] = r.playing; if (tab === "sid") render(); }).catch(() => {}); } // what is playing already (another window may have started it)
+  const tunes = (S.shelf ?? []).filter((i) => i.kind === "sid"), now = name ? S.sid[name] : null;
+  const run = !!machine()?.running;
+  body.innerHTML = `<div class="col" style="padding:8px 10px;gap:8px;height:100%;min-height:0">
+    <div class="row wrap" style="gap:8px">${now
+      ? `<span class="badge-s verified">playing</span><b class="trunc" style="min-width:0">${esc(now.title || now.shelf)}</b><span class="faint sm trunc">${esc(now.author || "")}${now.author ? " · " : ""}song ${now.song} of ${now.songs}</span><span class="spacer"></span><button class="btn sm danger" data-act="sid-stop">${icon("stop")} Stop</button>`
+      : `<b>SID jukebox</b><span class="faint sm">${run ? "Pick a tune from your shelf." : "Power the machine on first."}</span>`}</div>
+    ${now?.warnings?.length ? `<div class="faint sm" style="color:var(--warn,#e8c46a)">${now.warnings.map(esc).join(" ")}</div>` : ""}
+    ${sidAsk ? `<div class="problems" role="alert"><div>${esc(sidAsk.msg)}</div><div class="row" style="margin-top:6px"><button class="btn sm primary" data-act="sid-force">Play anyway</button><button class="btn sm" data-act="sid-cancel">Cancel</button></div></div>` : ""}
+    <div class="grow scroll col" style="gap:3px;min-height:0" id="sid-list">${tunes.length ? tunes.map((t) => {
+      const n = Math.min(t.sid?.songs ?? 1, Math.max(1, sidPick[t.name] ?? t.sid?.startSong ?? 1)), songs = t.sid?.songs ?? 1, on_ = now?.shelf === t.name;
+      return `<div class="slot" style="grid-template-columns:22px 1fr auto auto;padding:4px 6px${on_ ? ";outline:1px solid var(--ok,#6c6)" : ""}"><div style="text-align:center">${icon("music")}</div>
+        <div class="col" style="gap:0;min-width:0"><div class="name trunc sm">${esc(t.sid?.title || t.name)}</div><div class="faint trunc" style="font-size:10px">${esc(t.sid?.author || t.name)}${t.sid?.released ? " · " + esc(t.sid.released) : ""} · ${songs} song${songs === 1 ? "" : "s"}${t.sid ? " · " + esc(t.sid.clock) + " " + esc(t.sid.model) : ""}</div></div>
+        ${songs > 1 ? `<div class="row" style="gap:2px"><button class="btn sm ghost icon" data-act="sid-song" data-n="${t.name}" data-d="-1" aria-label="Previous song">‹</button><span class="mono sm" style="min-width:34px;text-align:center">${n}/${songs}</span><button class="btn sm ghost icon" data-act="sid-song" data-n="${t.name}" data-d="1" aria-label="Next song">›</button></div>` : "<span></span>"}
+        <button class="btn sm ${on_ ? "" : "primary"}" data-act="sid-play" data-n="${esc(t.name)}" ${run ? "" : "disabled"}>${icon("play")} Play</button></div>`;
+    }).join("") : `<div class="dim sm" style="padding:6px">No SID tunes on your shelf yet. Drop a .sid file on the window or press Import. Nix64 ships no music: the High Voltage SID Collection (hvsc.c64.org) is where most of it lives.</div>`}</div>
+    <div class="faint" style="font-size:10px;line-height:1.35">Play resets the machine (a tune takes the whole machine, as on a real C64), loads the tune into RAM and plays it on this machine's own SID chip, the one set by sid.model in its file. It plays tunes that sit in free RAM ($0800 to $9FFF and $C000 to $CFFF); others are refused, not played wrongly. No level meters yet. I have not listened to it by ear.</div>
+  </div>`;
+}
+async function sidPlay(shelf, force = false) {
+  const name = S.current;
+  try {
+    await post(`/api/machines/${name}/sid`, { shelf, song: sidPick[shelf] ?? undefined, force });
+    sidAsk = null;
+  } catch (e) {
+    if (e.status === 409 && e.body?.needsConfirm) sidAsk = { shelf, msg: e.body.error };
+    else { sidAsk = null; toast(e.message, "error"); }
+  }
+  if (tab === "sid") render();
+}
+actions["sid-play"] = (el) => sidPlay(el.dataset.n);
+actions["sid-force"] = () => { if (sidAsk) sidPlay(sidAsk.shelf, true); };
+actions["sid-cancel"] = () => { sidAsk = null; if (tab === "sid") render(); };
+actions["sid-stop"] = async () => { try { await post(`/api/machines/${S.current}/sid/stop`); } catch (e) { toast(e.message, "error"); } };
+actions["sid-song"] = (el) => {
+  const t = (S.shelf ?? []).find((i) => i.name === el.dataset.n), songs = t?.sid?.songs ?? 1;
+  const cur = sidPick[el.dataset.n] ?? t?.sid?.startSong ?? 1;
+  sidPick[el.dataset.n] = ((cur - 1 + Number(el.dataset.d) + songs) % songs) + 1;
+  if (tab === "sid") render();
+};
+on("sid", () => { if (tab === "sid") render(); });
+on("machines", () => { if (tab === "sid") render(); });
 const printerPane = notBuilt("Printer to PDF", "The engine can print to a file, but the shell does not yet collect it into a PDF.", "Planned: virtual MPS-803 to PDF; a real MPS when one is attached on the real-hardware path.");

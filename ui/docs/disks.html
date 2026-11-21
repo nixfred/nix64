@@ -12,6 +12,12 @@
 <li>Disks can be saved back to the shelf as a copy, or replaced by a blank formatted one.</li>
 <li>Tapes (.tap) and cartridges (.crt) have their own slots under the drives.</li>
 </ul>
+<h3>SID music</h3>
+<ul>
+<li>Drop a <b>.sid</b> file on the window (or Import) and it appears on your shelf with its title, author and song count. Open the <b>SID</b> tab under the screen to play it.</li>
+<li><b>Play</b> resets the machine, because a tune takes the whole machine, as on a real C64. If a BASIC program is in memory you are asked first. The tune runs on this machine's own SID chip (the model set by <code>sid.model</code> in its file); <b>Stop</b> resets the machine again.</li>
+<li>It plays tunes that sit in free RAM. A tune under the ROMs is refused, with the reason, rather than played wrongly. There are no level meters yet. Nix64 ships no music: the High Voltage SID Collection (hvsc.c64.org) is where most of it lives.</li>
+</ul>
 <h3>Verified by other people</h3>
 <ul>
 <li><b>Chuck Yeager's Advanced Flight Trainer</b>, from Ken Bandoly (@Maverick_229): a PAL C64C with a 1541-II and true drive emulation, loaded with Load and run, Space at the intro, <b>joystick port 2</b>, Intro Flight reaches the cockpit. His recipe: github.com/MaverickKB/omarchy-chuck-yeager-nix64. It is his report, not yet repeated here, and you need your own copy of the disk.</li>

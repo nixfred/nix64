@@ -7,7 +7,7 @@ import { devices } from "./devices";
 import { diskHistory, readState } from "./engine";
 import type { Hub, Route } from "./server";
 import { json } from "./server";
-import { driveInfo, ejectDisk, exportDisk, flushDisk, freeze, insertDisk, restoreFromHistory, setMedia, thaw, autostartPrg } from "./media";
+import { driveInfo, ejectDisk, exportDisk, flushDisk, freeze, insertDisk, restoreFromHistory, setMedia, thaw, autostartPrg, playSid, stopSid } from "./media";
 import { machineNames } from "./machinefile";
 import { paths } from "./paths";
 import { addToShelf, archiveFetch, archiveFiles, archiveSearch, kindOf, listShelf, removeFromShelf } from "./shelf";
@@ -76,12 +76,44 @@ export const apiRoutes: Route[] = [
   }],
   ["POST", new RegExp(`^${M}/freeze$`), async (hub, req, m) => { const slot = Number((await body(req)).slot); await freeze(m[1], slot); hub.lives.get(m[1])?.say("machine", `Whole machine frozen in slot ${slot}.`, "snapshot"); return json({ ok: true }); }],
   ["POST", new RegExp(`^${M}/thaw$`), async (hub, req, m) => { const slot = Number((await body(req)).slot); await thaw(m[1], slot); hub.lives.get(m[1])?.say("machine", `Machine restored from freeze slot ${slot}.`, "snapshot"); return json({ ok: true }); }],
+  // ----- SID tunes -----
+  ["GET", new RegExp(`^${M}/sid$`), (hub, _r, m) => {
+    const live = hub.lives.get(m[1]);
+    return json({ ok: true, playing: live?.sid ?? null });
+  }],
+  ["POST", new RegExp(`^${M}/sid$`), async (hub, req, m) => {
+    const live = hub.lives.get(m[1]);
+    if (!live) return err(409, "switch the machine on first");
+    const b = await body(req);
+    // A tune takes the whole machine (it is reset). Never throw away someone's program without asking.
+    let program = 0;
+    try { program = live.machine.programLines().length; } catch { /* cannot tell */ }
+    if (program > 0 && !live.sid && b.force !== true) return json({ ok: false, needsConfirm: true, error: `There is a BASIC program in memory (${program} lines). Playing a tune resets the machine and it would be lost. Freeze the machine into a slot first, or play anyway.` }, 409);
+    const np = await playSid(m[1], String(b.shelf ?? ""), b.song === undefined ? undefined : Number(b.song));
+    live.queueCleared();
+    live.sid = np;
+    live.say("host", `Tune “${np.shelf}”, song ${np.song} of ${np.songs}: the machine was reset, the tune and Nix64's player were written into RAM, and the tune's own code now drives the SID chip every frame.`, "monitor");
+    for (const w of np.warnings) live.say("note", w);
+    hub.broadcast({ t: "sid", name: m[1], sid: np });
+    return json({ ok: true, playing: np });
+  }],
+  ["POST", new RegExp(`^${M}/sid/stop$`), async (hub, _req, m) => {
+    const live = hub.lives.get(m[1]);
+    if (!live) return err(409, "switch the machine on first");
+    if (!live.sid) return err(409, "no tune is playing on this machine");
+    await stopSid(m[1]);
+    live.sid = null;
+    live.say("host", "Tune stopped: the machine was reset and the chip silenced.", "monitor");
+    hub.broadcast({ t: "sid", name: m[1], sid: null });
+    return json({ ok: true });
+  }],
   ["POST", new RegExp(`^${M}/run$`), async (hub, req, m) => {
     const live = hub.lives.get(m[1]);
     if (!live) return err(409, "switch the machine on first");
     const name = String((await body(req)).shelf);
     const kind = kindOf(name);
     if (kind === "disk") { void loadAndRun(live, name); return json({ ok: true, how: "typed LOAD" }); }
+    if (kind === "sid") return err(400, "use the SID player for tunes (POST /sid)");
     if (kind === "prg") {
       await autostartPrg(m[1], name);
       live.say("host", `VICE autostart loaded and started “${name}” (there is no disk to LOAD it from).`, "monitor");

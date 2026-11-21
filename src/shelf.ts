@@ -7,16 +7,17 @@ import { basename, extname, join } from "node:path";
 import { inflateRawSync } from "node:zlib";
 import { readDir } from "./d64";
 import { paths } from "./paths";
+import { parseSid, type SidInfo } from "./psid";
 
-export const MEDIA_EXT = new Set([".d64", ".d71", ".d81", ".g64", ".x64", ".t64", ".tap", ".crt", ".prg", ".p00", ".vsf"]);
-export type Kind = "disk" | "tape" | "cart" | "prg" | "snapshot" | "file";
+export const MEDIA_EXT = new Set([".d64", ".d71", ".d81", ".g64", ".x64", ".t64", ".tap", ".crt", ".prg", ".p00", ".vsf", ".sid"]);
+export type Kind = "disk" | "tape" | "cart" | "prg" | "snapshot" | "sid" | "file";
 export const kindOf = (name: string): Kind => {
   const e = extname(name).toLowerCase();
-  return [".d64", ".d71", ".d81", ".g64", ".x64"].includes(e) ? "disk" : [".tap", ".t64"].includes(e) ? "tape" : e === ".crt" ? "cart" : [".prg", ".p00"].includes(e) ? "prg" : e === ".vsf" ? "snapshot" : "file";
+  return [".d64", ".d71", ".d81", ".g64", ".x64"].includes(e) ? "disk" : [".tap", ".t64"].includes(e) ? "tape" : e === ".crt" ? "cart" : e === ".sid" ? "sid" : [".prg", ".p00"].includes(e) ? "prg" : e === ".vsf" ? "snapshot" : "file";
 };
 
-export type ShelfItem = { name: string; kind: Kind; size: number; sha: string; title?: string; mtime: number };
-const shaCache = new Map<string, { key: string; sha: string; title?: string }>();
+export type ShelfItem = { name: string; kind: Kind; size: number; sha: string; title?: string; mtime: number; sid?: SidInfo };
+const shaCache = new Map<string, { key: string; sha: string; title?: string; sid?: SidInfo }>();
 
 export function listShelf(): ShelfItem[] {
   mkdirSync(paths.shelf, { recursive: true });
@@ -29,10 +30,12 @@ export function listShelf(): ShelfItem[] {
     if (!c || c.key !== key) {
       const data = readFileSync(f);
       const dir = name.toLowerCase().endsWith(".d64") ? readDir(data) : null;
-      c = { key, sha: createHash("sha256").update(data).digest("hex"), title: dir ? `${dir.name} · ${dir.entries.length} files` : undefined };
+      let sid: SidInfo | undefined;
+      if (name.toLowerCase().endsWith(".sid")) { try { sid = parseSid(data); } catch { /* a damaged .sid is listed without details */ } }
+      c = { key, sha: createHash("sha256").update(data).digest("hex"), title: dir ? `${dir.name} · ${dir.entries.length} files` : sid ? `${sid.title || name}${sid.author ? " · " + sid.author : ""}` : undefined, sid };
       shaCache.set(f, c);
     }
-    out.push({ name, kind: kindOf(name), size: st.size, sha: c.sha, title: c.title, mtime: st.mtimeMs });
+    out.push({ name, kind: kindOf(name), size: st.size, sha: c.sha, title: c.title, mtime: st.mtimeMs, sid: c.sid });
   }
   return out;
 }
@@ -56,6 +59,7 @@ export function addToShelf(rawName: string, data: Uint8Array): string {
   if (data.length > MAX) throw new Error("that file is larger than 64 MB");
   if (!data.length) throw new Error("that file is empty");
   let name = cleanName(rawName);
+  if (extname(name).toLowerCase() === ".sid") parseSid(Buffer.from(data.buffer, data.byteOffset, data.byteLength)); // refuse a file that is not a SID tune, with the reason
   const ext = extname(name), stem = name.slice(0, -ext.length);
   for (let i = 2; existsSync(join(paths.shelf, name)); i++) name = `${stem}-${i}${ext}`;
   mkdirSync(paths.shelf, { recursive: true });

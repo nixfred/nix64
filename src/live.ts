@@ -32,6 +32,8 @@ export class Live {
   /** arrows + space + ctrl act as a joystick instead of as keys (a game is running) */
   keysAsJoystick: 0 | 1 | 2 = 0;
   feed: FeedItem[] = [];
+  /** the tune Nix64 started on this machine, if it is still playing (Stop, reset or another program clears it) */
+  sid: import("./media").NowPlaying | null = null;
   private feedId = 1;
   private fpsMark = { t: performance.now(), f: 0 };
   /** hooks other modules attach: called on every new feed item */

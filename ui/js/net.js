@@ -9,6 +9,7 @@ export const S = {
   status: Object.create(null), // name -> latest status message
   feed: Object.create(null), // name -> feed items
   cards: Object.create(null), // name -> assist cards
+  sid: Object.create(null), // name -> the tune playing on that machine (or null)
   guide: Object.create(null), // name -> { keys: [names], text, step }
   agent: { running: {}, detected: [] },
   tool: "keys",
@@ -49,6 +50,7 @@ export function connect() {
       case "feed": (S.feed[m.name] ??= []).push(m.item); if (S.feed[m.name].length > 300) S.feed[m.name].shift(); emit("feed", m.name); break;
       case "feed-all": S.feed[m.name] = m.items; emit("feed", m.name); break;
       case "cards": S.cards[m.name] = m.cards; emit("cards", m.name); break;
+      case "sid": S.sid[m.name] = m.sid; emit("sid", m.name); break;
       case "guide": S.guide[m.name] = m.guide; emit("guide", m.name); break;
       case "agent": Object.assign(S.agent, m.agent); emit("agent", m.name); break;
       case "toast": toast(m.text, m.kind); break;
@@ -72,7 +74,7 @@ function sendSubs() { send({ t: "sub", subs: wantSubs }); }
 export async function api(method, path, body) {
   const res = await fetch(path, { method, headers: { "x-nix64": "1", "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
-  if (!res.ok || data.ok === false) { const err = new Error(data.error ?? `HTTP ${res.status}`); err.problems = data.problems; throw err; }
+  if (!res.ok || data.ok === false) { const err = new Error(data.error ?? `HTTP ${res.status}`); err.problems = data.problems; err.status = res.status; err.body = data; throw err; }
   return data;
 }
 export const get = (p) => api("GET", p), post = (p, b = {}) => api("POST", p, b), put = (p, b) => api("PUT", p, b), del = (p) => api("DELETE", p);
