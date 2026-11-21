@@ -43,8 +43,7 @@ actions["dock-tab"] = (el) => { tab = el.dataset.tab; S.tool = tab; render(); };
 // ---------- the keyboard ----------
 
 function keysPane(body) {
-  const u = 40;
-  body.innerHTML = `<div class="osk-wrap"><div class="osk" id="osk">${ROWS.map((row, i) => `<div class="osk-row" style="${i === 1 ? "padding-left:6px" : i === 2 ? "padding-left:12px" : i === 3 ? "padding-left:0" : ""}">${row.map(([k, label, sub, w]) => `<button class="key ${LATCH.has(k) ? "latch" : ""}" data-key="${k}" style="width:${w * u + (w - 1) * 4}px" aria-label="${esc(label || k)}">${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ""}</button>`).join("")}</div>`).join("")}</div>
+  body.innerHTML = `<div class="osk-wrap"><div class="osk" id="osk">${ROWS.map((row, i) => `<div class="osk-row" style="${i === 1 ? "padding-left:6px" : i === 2 ? "padding-left:12px" : i === 3 ? "padding-left:0" : ""}">${row.map(([k, label, sub, w]) => `<button class="key ${LATCH.has(k) ? "latch" : ""}" data-key="${k}" style="--w:${w}" aria-label="${esc(label || k)}">${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ""}</button>`).join("")}</div>`).join("")}</div>
     <div class="fkeys">${FKEYS.map(([k, a, b]) => `<button class="key fn" data-key="${k}">${a}<small>${b}</small></button>`).join("")}</div></div>
     <div class="row sm faint" style="justify-content:center">Click keys to type · SHIFT, C=, CTRL stay down until the next key · your own keyboard works when the screen has focus</div>`;
   paintGuide();

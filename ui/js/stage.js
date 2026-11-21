@@ -84,16 +84,17 @@ export function update() {
 function renderStrip() {
   const m = machine(), st = S.status[S.current];
   const run = !!m?.running;
+  const b = (act, ic, label, title, extra = "") => `<button class="btn sm" data-act="${act}" ${extra} title="${title}" aria-label="${label}">${icon(ic)}<span class="lbl"> ${label}</span></button>`;
   document.getElementById("strip").innerHTML = `
-    <button class="btn sm" data-act="${run ? "power-off" : "power-on"}" ${m ? "" : "disabled"} title="${run ? "Switch the machine off" : "Switch the machine on"}">${icon("power")} ${run ? "Power off" : "Power on"}</button>
-    <button class="btn sm" data-act="reset" ${run ? "" : "disabled"} title="The reset button (RUN/STOP+RESTORE stays on the keyboard)">${icon("reset")} Reset</button>
-    <button class="btn sm" data-act="power-cycle" ${run ? "" : "disabled"} title="Power cycle: clears RAM, like unplugging it">${icon("cycle")} Power cycle</button>
-    <button class="btn sm" data-act="warp" aria-pressed="${st?.warp ? "true" : "false"}" ${run ? "" : "disabled"} title="Warp: run as fast as the computer allows (loading, long programs)">${icon("warp")} Warp</button>
-    <button class="btn sm" data-act="joykeys" aria-pressed="${joyKeys ? "true" : "false"}" ${run ? "" : "disabled"} title="Arrow keys and Space become a joystick in port 2 (Ctrl+J)">${icon("joystick")} Keys as stick</button>
-    <button class="btn sm" data-act="shot" ${run ? "" : "disabled"} title="Save the picture as a PNG">${icon("camera")} Shot</button>
-    <button class="btn sm" data-act="record" aria-pressed="${rec ? "true" : "false"}" ${run ? "" : "disabled"} title="Record the screen as a video">${icon(rec ? "stop" : "record")} ${rec ? "Stop rec" : "Rec"}</button>
+    ${b(run ? "power-off" : "power-on", "power", run ? "Power off" : "Power on", run ? "Switch the machine off" : "Switch the machine on", m ? "" : "disabled")}
+    ${b("reset", "reset", "Reset", "The reset button", run ? "" : "disabled")}
+    ${b("power-cycle", "cycle", "Power cycle", "Power cycle: clears RAM, like unplugging it", run ? "" : "disabled")}
+    ${b("warp", "warp", "Warp", "Warp: run as fast as the computer allows (loading, long programs)", `aria-pressed="${st?.warp ? "true" : "false"}" ${run ? "" : "disabled"}`)}
+    ${b("joykeys", "joystick", "Keys as stick", "Arrow keys and Space become a joystick in port 2 (Ctrl+J)", `aria-pressed="${joyKeys ? "true" : "false"}" ${run ? "" : "disabled"}`)}
+    ${b("shot", "camera", "Shot", "Save the picture as a PNG", run ? "" : "disabled")}
+    ${b("record", rec ? "stop" : "record", rec ? "Stop rec" : "Rec", "Record the screen as a video", `aria-pressed="${rec ? "true" : "false"}" ${run ? "" : "disabled"}`)}
     <span class="spacer"></span>
-    <span class="captured ${focused ? "on" : "off"}" id="captured">${focused ? "● KEYBOARD ON THE C64" : "○ click the screen to type"}</span>
+    <span class="captured ${focused ? "on" : "off"}" id="captured">${focused ? "● TYPING ON THE C64" : "○ click to type"}</span>
     <span class="chip" id="fpschip">${run && st ? `${st.fps || "?"} fps` : "off"}</span>
     <button class="btn sm ghost icon" data-act="fullscreen" title="Fullscreen (F11)" aria-label="Fullscreen">${icon("fullscreen")}</button>`;
 }
@@ -113,7 +114,7 @@ function setFocused(v) {
   focused = v;
   monitor?.classList.toggle("focus", v);
   const c = document.getElementById("captured");
-  if (c) { c.className = `captured ${v ? "on" : "off"}`; c.textContent = v ? "● KEYBOARD ON THE C64" : "○ click the screen to type"; }
+  if (c) { c.className = `captured ${v ? "on" : "off"}`; c.textContent = v ? "● TYPING ON THE C64" : "○ click to type"; }
   if (!v && S.current) send({ t: "release", name: S.current });
 }
 

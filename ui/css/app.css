@@ -149,7 +149,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* on-screen keyboard */
 .osk { display: grid; gap: 4px; flex: 1; min-height: 0; align-content: center; user-select: none; }
 .osk-row { display: flex; gap: 4px; justify-content: center; }
-.key { position: relative; height: 38px; min-width: 38px; padding: 0 4px; border-radius: 6px; border: 1px solid #2b3a73; background: linear-gradient(180deg, #243064, #172046); color: #dfe7ff; cursor: pointer; font: 600 .78rem var(--mono); display: grid; place-items: center; line-height: 1.05; text-align: center; box-shadow: 0 2px 0 #0a1030; }
+.key { position: relative; height: 38px; padding: 0 2px; border-radius: 6px; border: 1px solid #2b3a73; background: linear-gradient(180deg, #243064, #172046); color: #dfe7ff; cursor: pointer; font: 600 .78rem var(--mono); display: grid; place-items: center; line-height: 1.05; text-align: center; box-shadow: 0 2px 0 #0a1030; }
 .key small { display: block; font-size: .58rem; color: #8f9fda; font-weight: 500; }
 .key:hover { background: linear-gradient(180deg, #31418a, #213066); }
 .key.down, .key:active { transform: translateY(1px); box-shadow: none; background: linear-gradient(180deg, #3b82f6, #2a62c9); }
@@ -158,9 +158,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .key.pink { background: linear-gradient(180deg, #51406e, #33274b); }
 .key.guide { animation: pulse 1s ease-in-out infinite; border-color: #fff; background: linear-gradient(180deg, #22c55e, #15803d); color: #fff; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 4px rgba(74, 222, 128, .45), 0 2px 0 #0a1030; } }
-.osk-wrap { display: flex; gap: 10px; align-items: center; justify-content: center; flex: 1; min-height: 0; }
+.osk-wrap { display: flex; gap: 10px; align-items: center; justify-content: center; flex: 1; min-height: 0; container-type: inline-size; }
+.osk { --u: clamp(22px, calc((100cqw - 150px) / 16.9), 40px); }
+.key { width: calc(var(--w, 1) * var(--u) + (var(--w, 1) - 1) * 4px); min-width: 0; }
+.fkeys .key { width: calc(var(--u) * 1.3); min-width: 36px; }
+.captured { white-space: nowrap; }
 .fkeys { display: grid; gap: 4px; }
-.fkeys .key { height: 38px; min-width: 52px; }
+.fkeys .key { height: 38px; }
 
 /* ---------- right rail: agent ---------- */
 .agent { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; padding: 10px 12px; }
@@ -272,3 +276,5 @@ table.t tr:hover td { background: rgba(59, 130, 246, .08); }
 #doc code, .doc-pre { font-family: var(--mono); background: rgba(0, 0, 0, .35); border-radius: 4px; padding: 0 4px; color: var(--blue2); font-size: .85em; }
 .doc-pre { display: block; padding: 8px 10px; white-space: pre; margin: 6px 0; line-height: 1.5; }
 kbd { font: 600 .75rem var(--mono); padding: 1px 6px; border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 5px; background: rgba(147, 197, 253, .1); }
+
+@media (max-width: 1520px) { .strip .lbl { display: none; } }

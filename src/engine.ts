@@ -152,7 +152,7 @@ export async function startMachine(name: string, opts: { windowed?: boolean } = 
   const running = readState(name);
   if (running && alive(running)) return running;
 
-  const { gen } = switchMachine(name);
+  const gen = switchMachine(name).gen.n;
   const def = evaluate(readFileSync(machineFile(name), "utf8"), name, true);
   const monitorPort = await freePort(), binaryPort = await freePort();
   const shm = shmPath(name);
