@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Nix64
+GenericName=Commodore 64
+Comment=A real Commodore 64 with an AI agent beside it
+Exec=nix64
+Icon=nix64
+Terminal=false
+Categories=Game;Emulator;
+Keywords=c64;commodore;vice;basic;retro;
+StartupWMClass=Nix64

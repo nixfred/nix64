@@ -10,8 +10,10 @@
 //   nix64 edit NAME         edit the machine file in $EDITOR
 //   nix64 classic [ARGS]    the plain engine window, no shell (what Nix64 was before the shell)
 //   nix64 serve             run the shell's server in the foreground
+//   nix64 theme install     put the READY. Omarchy theme in ~/.config/omarchy/themes (then: omarchy theme set ready)
+//   nix64 skill install     link the c64 skill into your agents' skill folders (claude, codex, pi, agents), only where they exist
 //   nix64 doctor            check the engine, the browser, the agent
-import { existsSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { detectAgents, detectLocal } from "../src/agents";
 import { findEngine, readState, runningMachines, startMachine, stopMachine } from "../src/engine";
@@ -101,6 +103,32 @@ switch (cmd) {
     Bun.spawnSync(["mkdir", "-p", join(run, "nix64")]);
     const p = Bun.spawn([e, "+logcolorize", ...rest], { env: { ...process.env, NIX64_TELEMETRY: join(run, "nix64", "default.shm") }, stdin: "inherit", stdout: "inherit", stderr: "inherit" });
     process.exit(await p.exited);
+  }
+  case "theme": {
+    if (pos[0] !== "install") die("nix64 theme install");
+    const src = join(root, "theme/ready"), dest = join(process.env.HOME ?? "", ".config/omarchy/themes/ready");
+    if (!existsSync(src)) die(`the theme is not in ${src}`);
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(src, dest, { recursive: true });
+    console.log(`Installed the READY. theme in ${dest}\nSwitch to it with:  omarchy theme set ready`);
+    break;
+  }
+  case "skill": {
+    if (pos[0] !== "install") die("nix64 skill install");
+    const src = join(root, "skills/c64"), home = process.env.HOME ?? "";
+    const there = (p: string) => { try { lstatSync(p); return true; } catch { return false; } };
+    let n = 0;
+    for (const dir of [".claude/skills", ".codex/skills", ".pi/agent/skills", ".agents/skills"]) {
+      const base = join(home, dir);
+      if (!existsSync(base)) continue; // only agents that are really there
+      const link = join(base, "c64");
+      if (there(link)) { console.log(`left alone (already there): ${link}`); continue; }
+      symlinkSync(src, link);
+      console.log(`linked ${link} -> ${src}`);
+      n++;
+    }
+    if (!n) console.log("nothing to do: no agent skill folder was found, or the c64 skill is already linked.");
+    break;
   }
   case "doctor": {
     const e = findEngine(), b = findBrowser(), a = detectAgents(), l = await detectLocal();

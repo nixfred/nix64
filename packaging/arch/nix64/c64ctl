@@ -1,0 +1,2 @@
+#!/bin/sh
+exec bun /usr/lib/nix64/shell/bin/c64ctl.ts "$@"

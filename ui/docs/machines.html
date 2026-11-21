@@ -1,0 +1,19 @@
+<h2>Machines and files</h2>
+<p>A machine is <b>one declarative file</b> that says exactly what the computer is: model, region, SID chip, drives, devices. Press <i>Machine file</i> to read or edit it; the comments in it are its documentation.</p>
+<pre class="doc-pre">model  = "c64c"      # c64, c64c, c64old, c64gs
+region = "pal"       # pal (50 Hz) or ntsc (60 Hz)
+[sid]    model = "6581"
+[drive.8] type = "1541-II"  mode = "image"
+          image = "shelf:my-disk.d64"</pre>
+<h3>Generations, like NixOS</h3>
+<p>Every time the file changes and you press <i>Save and apply</i>, Nix64 records a numbered <b>generation</b>. Any earlier one can be rolled back to, and the old file is put back exactly. Disks and cartridges named in the file are pinned by SHA-256 in a content-addressed store, so the same file is the same machine anywhere. A running machine keeps its generation until you power it off and on.</p>
+<h3>From the terminal</h3>
+<pre class="doc-pre">nix64 ls                 machines and which are on
+nix64 new NAME           make one (--preset c64c-pal|breadbin-pal|c64c-ntsc|gs)
+nix64 start NAME         switch on, no window needed
+nix64 edit NAME          edit the file, record a generation
+nix64 rollback NAME 2    put generation 2's file back
+nix64 classic            the plain engine window, no shell</pre>
+<p>Machines run <b>headless</b> as small services of their own (<code>systemctl --user status nix64-m-NAME</code>), so closing the window does not stop them; open the window again and they are still running.</p>
+<h3>Freeze slots</h3>
+<p>The four <i>Freeze</i> buttons save the whole machine (CPU, RAM, chips, disks) as a VICE snapshot. Click a full slot to restore it; Shift+click to save over it.</p>

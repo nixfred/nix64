@@ -1,0 +1,4 @@
+# Nix64: let the logged-in user open a ZoomFloppy / XUM1541 (a real disk drive on USB) without root.
+# uaccess grants access to whoever is at the seat: no group to join, no daemon, no privilege wall.
+SUBSYSTEM=="usb", ATTRS{idVendor}=="16d0", ATTRS{idProduct}=="0504", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="03eb", ATTRS{idProduct}=="204b", TAG+="uaccess"

@@ -28,8 +28,6 @@ export type Settings = {
     assist: "eager" | "quiet" | "off";
     /** keys per second when the agent types */
     typingSpeed: number;
-    /** let the agent write straight into RAM (labelled in the feed). Off by default. */
-    directRam: boolean;
   };
   firstRunDone: boolean;
 };
@@ -38,7 +36,7 @@ export const DEFAULTS: Settings = {
   display: { scale: 100, crt: true, crtStrength: 50, bezel: true, reducedMotion: "auto", highContrast: false },
   sound: { ui: true, muted: false },
   keys: { joystickKeys: false },
-  agent: { choice: "auto", model: "", localEndpoint: "", assist: "eager", typingSpeed: 30, directRam: false },
+  agent: { choice: "auto", model: "", localEndpoint: "", assist: "eager", typingSpeed: 30 },
   firstRunDone: false,
 };
 

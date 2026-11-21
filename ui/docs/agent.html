@@ -1,0 +1,17 @@
+<h2>The agent</h2>
+<p>Nix64 uses the agent already on your computer: Omarchy ships <b>Claude Code</b>; Codex, pi, opencode and Crush are found too. Settings &gt; Agent chooses one, sets a model, and can point it at a model you run yourself (Ollama, LM Studio). Claude Code is the fully integrated one; the others run in a basic mode that has not been tested against Nix64.</p>
+<h3>Assist: it watches, and speaks up when you look stuck</h3>
+<p>Watching is <b>free and local</b>: simple rules over the machine's own screen and memory, no model, no network. It speaks only when something goes wrong: a command from another BASIC (<code>SOUND</code>, <code>CLS</code>, <code>COLOR</code>…), the same error again, an error left unanswered, a line typed and cleared twice. A card slides in beside the screen, never over it:</p>
+<ul>
+<li><b>Do it for me</b>: it types the C64 way on the real keyboard (for known cases it needs no model at all) and says what it did.</li>
+<li><b>Guide me</b>: the next key lights up on the on-screen keyboard and it checks each line. <b>You</b> type; nothing is done for you.</li>
+<li><b>Not now</b>: it waits longer next time. It starts eager and backs off. The <b>Quiet</b> switch in the top bar silences it entirely.</li>
+</ul>
+<p>If you type fast and clean, nothing fires, so you never see a card.</p>
+<h3>Drive: you ask, it does it where you can watch</h3>
+<p>Write what you want in the prompt. The agent gets <b>one tool</b>: <code>c64ctl</code>, which reads the screen and presses keys and moves sticks through the machine's real input. It types at the speed you set (Settings &gt; Agent). It cannot run anything else on your computer.</p>
+<p>The feed beside the screen tags every step: <i>ON C64</i> (done through the machine's own inputs, with the channel), <i>HOST STEP</i> (anything else: a refused request is shown too), <i>AGENT</i> (what it says), <i>NOTE</i>. A request that was refused is not shown as done.</p>
+<h3>STOP</h3>
+<p>The red <b>STOP</b> button (or <kbd>Esc</kbd> in the prompt) throws away everything queued, lets go of every key and stick, and ends the agent run, instantly, however much typing was waiting.</p>
+<h3>Whatever the C64 shows is data</h3>
+<p>Screens, disk directories and BBS banners can contain anything. The agent is told they are data, never instructions, and acts only on what you wrote.</p>

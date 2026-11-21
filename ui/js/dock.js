@@ -125,25 +125,23 @@ function spritesPane(body) {
   body.innerHTML = `<div class="sprites" id="sprites">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<div class="sprite off" id="sp${i}"><canvas width="24" height="21"></canvas><span>#${i}</span><span class="faint" id="spm${i}"></span></div>`).join("")}</div>
     <div class="faint sm">Read live from the VIC-II registers and the sprite pointers in RAM. Multicolour, expand and position are decoded as the chip sees them.</div>`;
   live(body, (s) => {
-    const v = s.vic, base = (s.ram[0x288] << 8) & 0xc000 | 0, screen = (((v[0x18] >> 4) & 15) * 0x400) + ((s.ram[0x288] << 8) & 0xc000) - ((s.ram[0x288] << 8) & 0xc000) + ((s.ram[0x288] << 8) & 0xc000);
-    const scr = ((s.ram[0x288] << 8) & 0xffff);
+    const v = s.vic, scr = (s.ram[0x288] << 8) & 0xffff; // the KERNAL's screen page: the sprite pointers sit 1016 bytes into it
     for (let i = 0; i < 8; i++) {
-      const on_ = (v[0x15] >> i) & 1, ptr = s.ram[scr + 0x3f8 + i], addr = ((scr & 0xc000) + ptr * 64) & 0xffff;
+      const on_ = (v[0x15] >> i) & 1, ptr = s.ram[(scr + 0x3f8 + i) & 0xffff], addr = ((scr & 0xc000) + ptr * 64) & 0xffff;
       const multi = (v[0x1c] >> i) & 1, col = v[0x27 + i] & 15, m0 = v[0x25] & 15, m1 = v[0x26] & 15;
       const c = document.querySelector(`#sp${i} canvas`); if (!c) continue;
       const g = c.getContext("2d"), img = g.createImageData(24, 21);
-      for (let y = 0; y < 21; y++) for (let x = 0; x < 24; x++) {
+      if (on_) for (let y = 0; y < 21; y++) for (let x = 0; x < 24; x++) {
         const byte = s.ram[(addr + y * 3 + (x >> 3)) & 0xffff];
         let ci = -1;
         if (multi) { const bits = (byte >> (6 - (x & 6))) & 3; ci = bits === 0 ? -1 : bits === 1 ? m0 : bits === 2 ? col : m1; }
         else if ((byte >> (7 - (x & 7))) & 1) ci = col;
-        const o = (y * 24 + x) * 4, rgb = ci < 0 ? [0, 0, 0] : [parseInt(PAL[ci].slice(1, 3), 16), parseInt(PAL[ci].slice(3, 5), 16), parseInt(PAL[ci].slice(5, 7), 16)];
-        img.data.set([...rgb, 255], o);
+        if (ci >= 0) img.data.set([parseInt(PAL[ci].slice(1, 3), 16), parseInt(PAL[ci].slice(3, 5), 16), parseInt(PAL[ci].slice(5, 7), 16), 255], (y * 24 + x) * 4);
       }
       g.putImageData(img, 0, 0);
-      const x9 = ((v[0x10] >> i) & 1) << 8, px = v[i * 2] | x9, py = v[i * 2 + 1];
+      const px = v[i * 2] | (((v[0x10] >> i) & 1) << 8), py = v[i * 2 + 1];
       document.getElementById(`sp${i}`).classList.toggle("off", !on_);
-      document.getElementById(`spm${i}`).textContent = `${on_ ? "on" : "off"} ${px},${py} $${hex(addr, 4)}${multi ? " multi" : ""}`;
+      document.getElementById(`spm${i}`).textContent = on_ ? `${px},${py} $${hex(addr, 4)}${multi ? " multi" : ""}${(v[0x17] >> i) & 1 ? " tall" : ""}${(v[0x1d] >> i) & 1 ? " wide" : ""}` : "off";
     }
   }, 400);
 }

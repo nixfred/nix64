@@ -1,0 +1,7 @@
+<h2>Troubleshooting</h2>
+<h3>The window says offline</h3><p>The shell's server is not running. Run <code>nix64</code> again; <code>nix64 doctor</code> checks the engine, the browser and the agent.</p>
+<h3>Nothing types</h3><p>Click the screen: the line under it says <i>keyboard on the C64</i> when it has focus. <kbd>F10</kbd> lets go.</p>
+<h3>The machine is slow or stuttering</h3><p>The engine needs a steady CPU. The shell never slows it: reading the screen costs nothing. If you recorded a video or have many machines in the Hub, close some. The fps chip under the screen shows the real emulated frame rate (50 for PAL, about 60 for NTSC).</p>
+<h3>No agent</h3><p>Settings &gt; Agent shows what was found. On Omarchy Claude Code comes with the system; sign in once with <code>claude</code> in a terminal.</p>
+<h3>No sound</h3><p>The engine plays through your normal audio. Check the machine file's <code>[sound]</code> section and that the volume is above 0. The interface sounds are separate (Settings &gt; Sound).</p>
+<h3>A disk will not load</h3><p>Type <code>LOAD"$",8</code> then <code>LIST</code> to see what is on it. <code>?DEVICE NOT PRESENT</code> means no disk in drive 8; <code>?FILE NOT FOUND</code> means the name is wrong.</p>

@@ -1,0 +1,10 @@
+<h2>Real hardware</h2>
+<p>Nix64 can use real devices where the engine supports them. <i>Devices</i> (left rail) shows what is plugged in and what this build can do. Each device has a badge: <b>verified</b> (tested on that hardware, with date and model), <b>untested</b> (the path exists but has not been run against the real thing), <b>experimental</b>, or <b>not in this build</b>.</p>
+<table class="t"><tr><th>Device</th><th>How</th><th>Status today</th></tr>
+<tr><td>Real disk drive (ZoomFloppy / XUM1541)</td><td>drive mode <code>real</code>, OpenCBM</td><td>needs the opencbm library (AUR); untested on hardware</td></tr>
+<tr><td>Real SID (USBSID-Pico, HardSID)</td><td>replaces the emulated SID</td><td>not in this build</td></tr>
+<tr><td>Real C64 keyboard (Keyrah)</td><td>positional map</td><td>not wired; it still types as a USB keyboard</td></tr>
+<tr><td>WiC64 (WiFi userport)</td><td><code>devices.wic64 = true</code></td><td>in the package; untested on a real network</td></tr>
+<tr><td>Ethernet cartridge</td><td><code>devices.ethernet</code>, a pcap build</td><td>built in; untested</td></tr>
+<tr><td>Modem to a BBS</td><td><code>devices.modem</code>: userport RS232 to TCP</td><td>experimental; the phone book is not built</td></tr></table>
+<p>The package installs a udev rule so the logged-in user can open a ZoomFloppy without root. There is no root daemon and no privilege wall: you own the machine.</p>

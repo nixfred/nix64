@@ -1,0 +1,17 @@
+<h2>Getting started</h2>
+<p>Nix64 is a real Commodore 64 (the VICE emulator, cycle-exact) in a window, with a real AI agent beside it. Nothing here is faked: if something cannot be done for real yet, it says so.</p>
+<h3>Your first minute</h3>
+<ol>
+<li><b>Make a machine.</b> Press <kbd>＋</kbd> in the top bar (or the welcome button). A machine is one small file: a C64C, PAL, with a 1541-II disk drive.</li>
+<li><b>It switches on.</b> You see the real boot screen. <b>Click the screen</b> and type: what you type is what appears.</li>
+<li><b>Type a program.</b> <code>10 PRINT "HELLO"</code> then <kbd>Enter</kbd>, <code>20 GOTO 10</code>, <code>RUN</code>. Press <kbd>Esc</kbd> (RUN/STOP) to stop it.</li>
+<li><b>Ask the agent.</b> In the box on the right write what you want ("make the border flash") and press <kbd>Enter</kbd>. It types on the real keyboard where you can watch. <b>STOP</b> takes the keyboard back at once.</li>
+</ol>
+<h3>The screen</h3>
+<ul>
+<li><b>Centre:</b> the C64's real picture through a CRT. Settings &gt; Look sets the strength; at 0 it is exact pixels.</li>
+<li><b>Left:</b> this machine, its drives, tape and cartridge, and your shelf of disks.</li>
+<li><b>Below:</b> the on-screen keyboard (it lights the next key when you ask to be guided) and tools that read real memory.</li>
+<li><b>Right:</b> the agent, with its activity feed. Every line is tagged <i>ON C64</i> (done through the machine's own inputs) or <i>HOST STEP</i> (done any other way).</li>
+</ul>
+<p>The <b>Hub</b> (<kbd>F9</kbd>) shows every machine at once, live. You can run as many as you like.</p>

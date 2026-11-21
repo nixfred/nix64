@@ -1,0 +1,16 @@
+<h2>The keyboard</h2>
+<p>The C64 keyboard is not a PC keyboard with different legends. Nix64 maps yours <b>symbolically</b>, like VICE's own keymap: what you type is what appears. <code>(</code> is Shift+9 on a PC but Shift+8 on a C64, and Nix64 presses the right C64 keys for you.</p>
+<table class="t"><tr><th>You press</th><th>The C64 gets</th></tr>
+<tr><td><kbd>Esc</kbd></td><td>RUN/STOP (<kbd>Shift</kbd>+<kbd>Esc</kbd> is SHIFT+RUN/STOP: load from tape or disk)</td></tr>
+<tr><td><kbd>Backspace</kbd></td><td>INST/DEL: deletes. <kbd>Delete</kbd> / <kbd>Insert</kbd> insert a space</td></tr>
+<tr><td><kbd>Tab</kbd> or <kbd>Ctrl</kbd></td><td>CTRL (colours: Ctrl+1 to 8)</td></tr>
+<tr><td><kbd>Alt</kbd></td><td>the Commodore key C= (graphics, colours 9 to 16)</td></tr>
+<tr><td><kbd>Home</kbd> / <kbd>Shift</kbd>+<kbd>Home</kbd></td><td>HOME / CLR (clear the screen)</td></tr>
+<tr><td><kbd>Page Up</kbd></td><td>RESTORE (with RUN/STOP it resets the screen)</td></tr>
+<tr><td>Arrow keys</td><td>the C64's cursor keys (left and up are Shift + right and down, as on the real thing)</td></tr>
+<tr><td><kbd>F1</kbd> to <kbd>F8</kbd></td><td>the four function keys; F2, F4, F6, F8 are the shifted ones</td></tr>
+<tr><td><kbd>F9</kbd> · <kbd>F10</kbd> · <kbd>F11</kbd></td><td>Hub · let the keyboard go · fullscreen (these stay with the shell)</td></tr></table>
+<h3>Joystick</h3>
+<p><kbd>Ctrl</kbd>+<kbd>J</kbd> (or "Keys as stick") turns the arrow keys and Space into a joystick in port 2. A gamepad is picked up automatically and also drives port 2. On a real C64, a joystick in port 2 shares wires with the keyboard, so a held stick can type stray characters: Nix64 keeps that authentic behaviour.</p>
+<h3>Pasting and the on-screen keyboard</h3>
+<p>Paste text with <kbd>Ctrl</kbd>+<kbd>V</kbd> while the screen has focus: it is typed through the real keyboard buffer. Characters the C64 cannot type are refused, not changed. On the on-screen keyboard SHIFT, C= and CTRL stay down until the next key.</p>

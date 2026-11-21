@@ -263,3 +263,12 @@ table.t tr:hover td { background: rgba(59, 130, 246, .08); }
 
 .ic { flex: none; vertical-align: -0.16em; }
 .btn .ic { opacity: .92; }
+
+/* manual */
+#doc h2 { font: 700 1.1rem var(--mono); letter-spacing: .1em; color: var(--c64fg); margin-bottom: 8px; }
+#doc h3 { font-size: .95rem; margin: 14px 0 4px; color: var(--blue2); }
+#doc p, #doc li { color: var(--text); font-size: .9rem; margin: 4px 0; }
+#doc ul, #doc ol { padding-left: 20px; }
+#doc code, .doc-pre { font-family: var(--mono); background: rgba(0, 0, 0, .35); border-radius: 4px; padding: 0 4px; color: var(--blue2); font-size: .85em; }
+.doc-pre { display: block; padding: 8px 10px; white-space: pre; margin: 6px 0; line-height: 1.5; }
+kbd { font: 600 .75rem var(--mono); padding: 1px 6px; border: 1px solid var(--line2); border-bottom-width: 2px; border-radius: 5px; background: rgba(147, 197, 253, .1); }

@@ -1,0 +1,33 @@
+# Maintainer: nixfred <https://nixfred.com>
+#
+# The Nix64 shell: the C64 inside its own window with an AI agent beside it, machines as files.
+# TypeScript run by bun, so there is nothing to compile: this package installs the source and a launcher.
+# It is built FROM THE CHECKOUT THIS RECIPE SITS IN (packaging/arch/nix64 of the repo), on each host.
+# The engine (VICE with the Nix64 patches) is the separate nix64-vice package, built from source too.
+pkgname=nix64
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Nix64: a real Commodore 64 platform: machines as files, a shell, and an AI agent beside the real machine'
+arch=(any)
+license=(GPL-2.0-or-later)
+url='https://github.com/nixfred/nix64'
+depends=(nix64-vice bun)
+optdepends=('chromium: the shell window (any Chromium-based browser works; set NIX64_BROWSER)'
+            'claude-code: the agent that assists and drives (Codex, pi, opencode and Crush are also found)'
+            'opencbm: real disk drives on a ZoomFloppy (AUR)')
+source=(nix64 c64ctl nix64.desktop 70-nix64.rules)
+b2sums=('SKIP' 'SKIP' 'SKIP' 'SKIP')
+
+package() {
+  local repo="$startdir/../../.."
+  install -d "$pkgdir/usr/lib/nix64/shell"
+  cp -r "$repo/bin" "$repo/src" "$repo/ui" "$repo/skills" "$repo/theme" "$pkgdir/usr/lib/nix64/shell/"
+  install -Dm755 nix64 "$pkgdir/usr/bin/nix64"
+  install -Dm755 c64ctl "$pkgdir/usr/bin/c64ctl"
+  install -Dm644 nix64.desktop "$pkgdir/usr/share/applications/nix64.desktop"
+  install -Dm644 "$repo/ui/img/icon.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/nix64.svg"
+  install -Dm644 70-nix64.rules "$pkgdir/usr/lib/udev/rules.d/70-nix64.rules"
+  install -Dm644 "$repo/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 "$repo/CREDITS.md" "$pkgdir/usr/share/doc/$pkgname/CREDITS.md"
+  install -Dm644 "$repo/README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

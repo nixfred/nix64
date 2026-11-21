@@ -50,7 +50,6 @@ actions["settings"] = () => {
       ${row("Local model server", (S.agent.local ?? []).map((l) => `${l.name} ${l.up ? "● up" : "○ not running"}`).join(" · ") || "Ollama or LM Studio", `<input class="field" id="set-localEndpoint" style="width:150px" value="${esc(a.localEndpoint)}" placeholder="http://127.0.0.1:11434">`)}
       ${row("Assist", "Eager: speaks up when you look stuck, learns, backs off", `<select class="select" id="set-assist">${["eager", "quiet", "off"].map((x) => `<option ${a.assist === x ? "selected" : ""}>${x}</option>`).join("")}</select>`)}
       ${row("Typing speed", "Keys per second when it types for you", `<span class="mono sm" id="ts">${a.typingSpeed}</span>${rg("set-typingSpeed", a.typingSpeed, 5, 120)}`)}
-      ${row("Direct RAM writes", "Lets the agent POKE memory without typing it. Labelled HOST STEP in the feed.", tg("set-directRam", a.directRam))}
       <div class="faint sm" style="line-height:1.5">${det.length ? "Nix64 uses the agent already on this computer: Omarchy ships Claude Code, and Codex, pi, opencode and Crush are found too. To run on your own machine use Omarchy's Install > AI > Ollama or LM Studio, then set its address above." : "No agent program was found. On Omarchy, Claude Code is installed with the system. Otherwise install one (claude, codex, pi, opencode or crush) or set up a local model with Omarchy's Install > AI menu."}</div>
     </div></div>
     <div class="dialog-h" style="border-top:1px solid var(--line);border-bottom:0"><span class="faint sm">Changes apply as you make them.</span><span style="flex:1"></span><button class="btn primary" data-act="close">Done</button></div>`, "fit");
@@ -186,4 +185,31 @@ actions["devices"] = async () => {
     document.getElementById("devs").innerHTML = `<table class="t"><tr><th>Device</th><th>Found</th><th>How Nix64 uses it</th><th>Status</th></tr>${d.devices.map((x) => `<tr><td><b>${esc(x.name)}</b><div class="faint sm">${esc(x.what)}</div></td><td>${x.found.length ? x.found.map(esc).join("<br>") : `<span class="faint">not plugged in</span>`}</td><td class="sm">${esc(x.how)}</td><td><span class="badge-s ${x.badge}">${esc(x.badgeText)}</span></td></tr>`).join("")}</table>
       <div class="faint sm" style="margin-top:10px;line-height:1.5">Badges: <b>verified</b> means tested on that hardware (with date and model); <b>untested</b> means the path exists in the engine but has not been run against the real thing; <b>not in this build</b> means the engine was built without it. Nothing is ever shown as working that was not tested.</div>`;
   } catch (e) { document.getElementById("devs").innerHTML = `<div class="problems">${esc(e.message)}</div>`; }
+};
+
+// ---------- a disk in a drive: directory, history, export ----------
+
+let diskSlot = "";
+actions["drive-dir"] = async (el) => {
+  diskSlot = el.dataset.slot;
+  const name = S.current;
+  try {
+    const [{ drives }, { history }] = await Promise.all([get(`/api/machines/${name}/drives`), get(`/api/machines/${name}/drives/${diskSlot}/history`)]);
+    const d = drives.find((x) => x.slot === diskSlot), dir = d?.disk;
+    open(`${head(`Drive ${diskSlot}`, `<span class="chip">${esc(d?.type ?? "")}</span>${dir ? `<span class="chip">“${esc(dir.name)}” ${esc(dir.id)}</span>` : `<span class="chip">empty</span>`}`)}
+      <div class="dialog-b" style="grid-template-columns:minmax(0,1fr) 340px">
+        <div class="col" style="min-height:0"><div class="panel-h">Directory <span class="sub">${dir ? `${dir.blocksFree} blocks free` : ""}</span></div>
+          <div class="grow scroll">${dir ? (dir.entries.length ? `<table class="t"><tr><th>Blocks</th><th>Name</th><th>Type</th></tr>${dir.entries.map((e) => `<tr><td class="mono">${e.blocks}</td><td class="mono">"${esc(e.name)}"</td><td class="mono">${e.type}${e.closed ? "" : "*"}${e.locked ? "<" : ""}</td></tr>`).join("")}</table>` : `<div class="dim" style="padding:10px">A blank, formatted disk: nothing saved on it yet. SAVE"NAME",8 puts a program on it.</div>`) : `<div class="dim" style="padding:10px">No disk in this drive. Drag one from the shelf, or insert a blank one.</div>`}</div>
+          <div class="row wrap"><button class="btn" data-act="disk-blank">Insert a blank disk</button><button class="btn" data-act="disk-export" ${dir ? "" : "disabled"}>${icon("upload")} Save a copy to the shelf</button></div></div>
+        <div class="col" style="min-height:0"><div class="panel-h">History <span class="sub">writes are kept: nothing is lost</span></div>
+          <div class="grow scroll col" style="gap:4px">${history.map((h) => `<div class="slot" style="grid-template-columns:1fr auto"><div><div class="name sm">${new Date(h.time).toLocaleString()}</div><div class="meta">${esc(h.sha)} · ${(h.size / 1024).toFixed(0)} KB</div></div><button class="btn sm" data-act="disk-restore" data-file="${esc(h.file)}">Put back</button></div>`).join("") || `<div class="dim sm" style="padding:6px">The disk has not changed yet. Every earlier state is kept here once it does.</div>`}</div>
+          <div class="faint sm" style="line-height:1.45">Disks behave like real disks: a SAVE writes to the disk in the drive. Before anything replaces it, the old contents go to this history.</div></div></div>`);
+  } catch (e) { toast(e.message, "error"); }
+};
+actions["disk-restore"] = async (el) => { try { await post(`/api/machines/${S.current}/drives/${diskSlot}/restore`, { file: el.dataset.file }); toast("Disk put back to that state.", "ok"); close(); window.dispatchEvent(new Event("nix64-select")); } catch (e) { toast(e.message, "error"); } };
+actions["disk-export"] = async () => { try { const r = await post(`/api/machines/${S.current}/drives/${diskSlot}/export`, {}); toast(`Saved a copy as ${r.name} on your shelf.`, "ok"); await loadShelf(); } catch (e) { toast(e.message, "error"); } };
+actions["disk-blank"] = async () => {
+  const label = prompt("Name for the blank disk (up to 16 letters):", "NEW DISK");
+  if (label === null) return;
+  try { await post(`/api/machines/${S.current}/drives/${diskSlot}/insert`, { blank: label }); toast("Blank disk inserted.", "ok"); close(); window.dispatchEvent(new Event("nix64-select")); } catch (e) { toast(e.message, "error"); }
 };

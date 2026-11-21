@@ -1,0 +1,16 @@
+<h2>Drives and disks</h2>
+<p>Drives 8 to 11 are real 1541-family drives with their own 6502, so fast-loaders work. A disk in a drive is a <b>working copy</b>: a SAVE writes to it, as on a real disk, and the old contents go to a <b>history</b> first, so a bad save is never final (<i>☰</i> next to the drive).</p>
+<h3>Getting media</h3>
+<ul>
+<li><b>Drop</b> any .d64 .g64 .d71 .d81 .t64 .tap .crt .prg onto the window, or press <i>Import</i>. They go on your <b>shelf</b> (<code>~/Nix64/shelf</code>), a folder you can see.</li>
+<li><b>Library</b> searches the Internet Archive when you ask. You choose what to fetch: make sure you own it or may have it. Nix64 itself never ships ROMs or commercial software.</li>
+</ul>
+<h3>Using it</h3>
+<ul>
+<li>Drag a disk from the shelf onto a drive slot, or press <b>▸</b> beside it for the choices.</li>
+<li><b>Load and run</b> puts the disk in drive 8 and <i>types</i> <code>LOAD"*",8,1</code> for you, where you can watch the real loader. Warp is on while it loads and switches itself off when the machine is ready, then it types <code>RUN</code>.</li>
+<li>Disks can be saved back to the shelf as a copy, or replaced by a blank formatted one.</li>
+<li>Tapes (.tap) and cartridges (.crt) have their own slots under the drives.</li>
+</ul>
+<h3>Honest limits</h3>
+<p>The datasette has no play/stop/counter controls in the shell yet. Real drives on a ZoomFloppy need the OpenCBM library, which is not in this package (see <i>Real hardware</i>).</p>
