@@ -179,7 +179,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .fi .tag { font: 600 .62rem var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 2px 0; border-radius: 4px; text-align: center; align-self: start; border: 1px solid var(--line2); color: var(--dim); }
 .fi.machine .tag { color: var(--ok); border-color: rgba(74, 222, 128, .4); }
 .fi.host .tag { color: var(--warn); border-color: rgba(251, 191, 36, .45); }
-.fi.say .tag { color: var(--blue2); } .fi.error .tag { color: var(--bad); border-color: rgba(248, 113, 113, .5); }
+.fi.say .tag { color: var(--blue2); } .fi.hint .tag { color: var(--info); border-color: rgba(103, 232, 249, .4); } .fi.error .tag { color: var(--bad); border-color: rgba(248, 113, 113, .5); }
 .fi.user .tag { color: var(--c64fg); border-color: rgba(167, 158, 245, .45); }
 .fi .via { color: var(--faint); font: .68rem var(--mono); }
 .prompt { display: flex; flex-direction: column; gap: 6px; }

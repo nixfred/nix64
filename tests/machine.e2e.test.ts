@@ -40,7 +40,7 @@ suite("a driven machine", () => {
   });
 
   test("the engine speaks telemetry version 2 and can be driven", () => {
-    expect(m.version).toBe(2);
+    expect(m.version).toBeGreaterThanOrEqual(2); // 4 with patches 0003 and 0004; the input ring is from version 2
     expect(m.canDrive).toBe(true);
     expect(m.screen().some((r) => r.includes("BASIC BYTES FREE"))).toBe(true);
   });

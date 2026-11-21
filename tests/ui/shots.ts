@@ -65,6 +65,29 @@ try {
   await Bun.sleep(900);
   await snap("02-typed");
 
+  // the assistant: another BASIC's command, a card beside the screen, then Guide me with a lit key
+  await page.click("#screen");
+  await page.type("SOUND 1,2,3\n");
+  console.log("card appeared:", await page.waitFor(`!!document.querySelector('#cards .card')`, 8000));
+  await Bun.sleep(500);
+  await snap("09-card");
+  await page.eval(`document.querySelector('#cards [data-action=guide]').click()`);
+  await page.waitFor(`!!document.querySelector('.key.guide')`, 8000);
+  await page.eval(`document.querySelector('#screen').focus()`);
+  await page.type("POKE 5");
+  await Bun.sleep(900);
+  await snap("10-guide");
+  await page.eval(`document.querySelector('#cards [data-action=stopguide]')?.click()`);
+  await Bun.sleep(300);
+  await page.eval(`document.querySelector('#screen').focus()`);
+  for (let i = 0; i < 6; i++) await page.key("Backspace", "Backspace"); // take back the half-typed POKE
+  await page.type("CLS\n");
+  const gotDo = await page.waitFor(`!!document.querySelector('#cards [data-action=do]')`, 8000);
+  if (!gotDo) console.log("NO DO CARD; cards:", await page.eval(`document.querySelector('#cards').innerText`), "| screen:", await page.eval(`JSON.stringify(__S.status[__S.current].screen.filter(Boolean).slice(-6))`));
+  await page.eval(`document.querySelector('#cards [data-action=do]')?.click()`);
+  await Bun.sleep(7000);
+  await snap("11-agent-feed");
+
   await page.eval(`document.querySelector('[data-act=hub]').click()`); await Bun.sleep(900);
   await snap("03-hub"); await law17("hub");
   await page.eval(`document.querySelector('[data-act=hub]').click()`); await Bun.sleep(300);

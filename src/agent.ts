@@ -124,7 +124,7 @@ export function attachAgent(hub: Hub): void {
 
   /** Type lines for the user, on the real keyboard, no model needed. Visible, and in the feed. */
   async function typeLines(live: Live, lines: string[], hint: Hint): Promise<void> {
-    live.say("say", `${hint.intent[0].toUpperCase()}${hint.intent.slice(1)}: ${hint.why}`);
+    live.say("hint", `${hint.intent[0].toUpperCase()}${hint.intent.slice(1)}: ${hint.why}`);
     try {
       for (const line of lines) {
         live.say("machine", `Typed \`${line}\` and pressed RETURN.`, "keyboard");

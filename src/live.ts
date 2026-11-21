@@ -9,8 +9,8 @@ import type { RunState } from "./engine";
 export type FeedItem = {
   id: number;
   time: number;
-  /** what happened: the agent said something, did something on the machine, did a LABELLED host-side step, or the rules noticed */
-  kind: "say" | "machine" | "host" | "note" | "error" | "user";
+  /** what happened: the agent said something (say) or the local rules explained something, no model involved (hint), did something on the machine, did a LABELLED host-side step, or the rules noticed */
+  kind: "say" | "hint" | "machine" | "host" | "note" | "error" | "user";
   text: string;
   /** for kind "machine": the real channel used, e.g. "keyboard" */
   via?: string;

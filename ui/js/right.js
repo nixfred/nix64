@@ -9,7 +9,7 @@ import { S, on, send, get, post, actions, toast, machine, esc } from "./net.js";
 import { icon } from "./icons.js";
 import { blip } from "./sounds.js";
 
-const TAGS = { machine: "ON C64", host: "HOST STEP", say: "AGENT", note: "NOTE", error: "ERROR", user: "YOU" };
+const TAGS = { machine: "ON C64", host: "HOST STEP", say: "AGENT", hint: "HINT", note: "NOTE", error: "ERROR", user: "YOU" };
 let seenCards = new Set();
 
 export function init() {
