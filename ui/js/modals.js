@@ -151,7 +151,7 @@ actions["shelf-open"] = async () => {
       <div class="col" style="min-height:0"><div class="panel-h">Internet Archive</div>
         <div class="faint sm" style="line-height:1.45">Search and fetch media yourself. You choose what to download; make sure you own it or may have it.</div>
         <div class="row"><input class="field" id="aq" placeholder="e.g. Buck Rogers Planet of Zoom" style="flex:1"><button class="btn primary" data-act="archive-search">Search</button></div>
-        <div class="chips"><button class="btn sm ghost" data-act="archive-q" data-q="Buck Rogers Planet of Zoom commodore 64">Planet of Zoom</button><button class="btn sm ghost" data-act="archive-q" data-q="Buck Rogers Countdown to Doomsday commodore 64">Countdown to Doomsday</button></div>
+        <div class="chips"><button class="btn sm ghost" data-act="archive-q" data-q="Buck Rogers Planet of Zoom c64">Planet of Zoom</button><button class="btn sm ghost" data-act="archive-q" data-q="Buck Rogers Countdown to Doomsday c64">Countdown to Doomsday</button></div>
         <div class="grow scroll col" id="ares" style="gap:4px"><div class="dim sm">Results appear here.</div></div></div></div>`);
 };
 actions["archive-q"] = (el) => { document.getElementById("aq").value = el.dataset.q; actions["archive-search"](); };
@@ -194,7 +194,7 @@ actions["drive-dir"] = async (el) => {
   diskSlot = el.dataset.slot;
   const name = S.current;
   try {
-    const [{ drives }, { history }] = await Promise.all([get(`/api/machines/${name}/drives`), get(`/api/machines/${name}/drives/${diskSlot}/history`)]);
+    const [{ drives }, { history }] = await Promise.all([get(`/api/machines/${name}/drives?flush=1`), get(`/api/machines/${name}/drives/${diskSlot}/history`)]);
     const d = drives.find((x) => x.slot === diskSlot), dir = d?.disk;
     open(`${head(`Drive ${diskSlot}`, `<span class="chip">${esc(d?.type ?? "")}</span>${dir ? `<span class="chip">“${esc(dir.name)}” ${esc(dir.id)}</span>` : `<span class="chip">empty</span>`}`)}
       <div class="dialog-b" style="grid-template-columns:minmax(0,1fr) 340px">

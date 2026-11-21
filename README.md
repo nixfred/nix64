@@ -234,9 +234,21 @@ A real disk drive needs the OpenCBM library (AUR); a ZoomFloppy gets a udev rule
 the Ethernet cartridge and the RS232 modem are built into the engine and wired to the machine file, untested
 against the real thing. A device earns **verified** only on a real desk, with a date and a model.
 
-**Tested on:** real Omarchy machines (a desktop and a laptop) built from source and installed with pacman, the
-whole suite running against the installed engine; and a fresh Omarchy virtual machine for the window itself.
-Not yet verified by a human: that you can *hear* the sound, and the real-hardware v1 gate below.
+**Tested on:**
+
+- **A real Omarchy desktop (a stock Omarchy 4.0.2 virtual machine, Hyprland and Waybar).** Both packages were
+  built from this repo's public source *inside the guest* and installed with pacman (`pacman -Qkk`: 0 altered
+  files). `nix64` opened the shell as a window and a program typed with `c64ctl` ran on screen (the screenshot
+  below is that window). The machine was a systemd user unit; the engine held a PipeWire stream, unmuted; the
+  only listening sockets were on 127.0.0.1 (the shell on 6464, the engine's two monitor doors on ephemeral
+  ports). The window's Hyprland class is `chrome-127.0.0.1__-Default`, title `Nix64`, if you want a window rule.
+- **Two real Omarchy computers (a desktop and a laptop)**, built from source and installed with pacman, with the
+  whole suite run against the installed engine (98 passed, 4 opt-in tests skipped).
+- Not verified by a human: that you can *hear* it, and the real-hardware v1 gate below.
+
+<div align="center">
+<img src="assets/screenshots/omarchy-desktop.png" alt="Nix64 running on a real Omarchy desktop" width="80%">
+</div>
 
 ## Roadmap
 

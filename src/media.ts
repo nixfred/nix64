@@ -64,9 +64,22 @@ export async function restoreFromHistory(name: string, slotStr: string, file: st
   if (st) await attach(st.monitorPort, diskPath(name, slot), Number(slot));
 }
 
-export function exportDisk(name: string, slotStr: string, as?: string): string {
+/**
+ * The 1541 emulation keeps its tracks in memory and writes them back to the image when the disk is taken
+ * out. So before the image file is read for anything that matters (a copy, the directory) a running machine's
+ * disk is re-seated: out and in again, which takes a few milliseconds and makes the file true.
+ */
+export async function flushDisk(name: string, slotStr: string): Promise<void> {
+  const slot = slotOk(slotStr), st = readState(name), f = diskPath(name, slot);
+  if (!st || !existsSync(f)) return;
+  await detach(st.monitorPort, Number(slot));
+  await attach(st.monitorPort, f, Number(slot));
+}
+
+export async function exportDisk(name: string, slotStr: string, as?: string): Promise<string> {
   const slot = slotOk(slotStr), f = diskPath(name, slot);
   if (!existsSync(f)) throw new Error(`drive ${slot} is empty`);
+  await flushDisk(name, slot);
   const dir = readDir(readFileSync(f));
   const base = (as || `${dir?.name || name}-${new Date().toISOString().slice(0, 10)}`).replace(/\.d64$/i, "");
   return addToShelf(`${base}.d64`, readFileSync(f));

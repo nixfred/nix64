@@ -7,7 +7,7 @@ import { devices } from "./devices";
 import { diskHistory, readState } from "./engine";
 import type { Hub, Route } from "./server";
 import { json } from "./server";
-import { driveInfo, ejectDisk, exportDisk, freeze, insertDisk, restoreFromHistory, setMedia, thaw, autostartPrg } from "./media";
+import { driveInfo, ejectDisk, exportDisk, flushDisk, freeze, insertDisk, restoreFromHistory, setMedia, thaw, autostartPrg } from "./media";
 import { machineNames } from "./machinefile";
 import { paths } from "./paths";
 import { addToShelf, archiveFetch, archiveFiles, archiveSearch, kindOf, listShelf, removeFromShelf } from "./shelf";
@@ -49,7 +49,11 @@ async function loadAndRun(live: Live, shelfName: string): Promise<void> {
 
 export const apiRoutes: Route[] = [
   // ----- drives and media -----
-  ["GET", new RegExp(`^${M}/drives$`), (_h, _r, m) => (known(m[1]) ? json({ ok: true, ...driveInfo(m[1]) }) : err(404, "no such machine"))],
+  ["GET", new RegExp(`^${M}/drives$`), async (_h, _r, m, url) => {
+    if (!known(m[1])) return err(404, "no such machine");
+    if (url.searchParams.get("flush")) for (const s of ["8", "9", "10", "11"]) await flushDisk(m[1], s).catch(() => {}); // make the images true first (the disk dialog asks)
+    return json({ ok: true, ...driveInfo(m[1]) });
+  }],
   ["POST", new RegExp(`^${M}/drives/(\\d+)/insert$`), async (hub, req, m) => {
     const b = await body(req);
     const label = await insertDisk(m[1], m[2], { shelf: b.shelf, blank: b.blank });
@@ -59,7 +63,7 @@ export const apiRoutes: Route[] = [
   ["POST", new RegExp(`^${M}/drives/(\\d+)/eject$`), async (hub, _req, m) => { await ejectDisk(m[1], m[2]); hub.lives.get(m[1])?.say("machine", `Disk ejected from drive ${m[2]}.`, "drive tray"); return json({ ok: true }); }],
   ["GET", new RegExp(`^${M}/drives/(\\d+)/history$`), (_h, _r, m) => json({ ok: true, history: diskHistory(m[1], m[2]) })],
   ["POST", new RegExp(`^${M}/drives/(\\d+)/restore$`), async (hub, req, m) => { await restoreFromHistory(m[1], m[2], String((await body(req)).file)); hub.lives.get(m[1])?.say("machine", `Disk in drive ${m[2]} put back to an earlier state.`, "drive tray"); return json({ ok: true }); }],
-  ["POST", new RegExp(`^${M}/drives/(\\d+)/export$`), async (_h, req, m) => json({ ok: true, name: exportDisk(m[1], m[2], (await body(req)).name) })],
+  ["POST", new RegExp(`^${M}/drives/(\\d+)/export$`), async (_h, req, m) => json({ ok: true, name: await exportDisk(m[1], m[2], (await body(req)).name) })],
   ["POST", new RegExp(`^${M}/media/(tape|cart)$`), async (hub, req, m) => {
     const b = await body(req);
     await setMedia(m[1], m[2] as "tape" | "cart", { shelf: b.shelf, eject: !!b.eject });
