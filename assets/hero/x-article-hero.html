@@ -1,0 +1,87 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Nix64 hero</title>
+<style>
+  /* Master canvas 3200x1800 (16:9). Everything that matters sits in the centre band (y 360 to 1440), so a 5:2 or
+     3:1 crop of the middle keeps it. Render at any window size: the stage centres itself vertically. */
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #050a1c; }
+  .stage { position: absolute; left: 0; top: 50%; width: 3200px; height: 1800px; transform: translateY(-50%); overflow: hidden;
+    font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; color: #e2eaff;
+    background:
+      radial-gradient(1500px 1000px at 12% 8%, rgba(59,130,246,.34), transparent 62%),
+      radial-gradient(1700px 1100px at 96% 100%, rgba(167,158,245,.30), transparent 60%),
+      radial-gradient(900px 700px at 62% 48%, rgba(30,58,138,.55), transparent 70%),
+      linear-gradient(135deg, #050a1c, #0b1438 55%, #1b1448); }
+  .stage::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(180deg, rgba(255,255,255,.028) 0 2px, transparent 2px 6px); }
+  .stage::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(0,0,0,.55) 100%); }
+  .dots { position: absolute; inset: 0; opacity: .5;
+    background-image: radial-gradient(rgba(147,197,253,.16) 2px, transparent 3px); background-size: 64px 64px; }
+
+  /* the loading stripes: the C64 palette, as the raster bars of a real loader */
+  .bars { position: absolute; left: 0; right: 0; height: 144px; display: flex; flex-direction: column; z-index: 3; }
+  .bars i { flex: 1; display: block; }
+  .bars.top { top: 0; } .bars.bottom { bottom: 0; flex-direction: column-reverse; }
+  .bars.top::after, .bars.bottom::after { content: ""; position: absolute; left: 0; right: 0; height: 40px; background: linear-gradient(rgba(5,10,28,.0), rgba(5,10,28,.0)); }
+
+  .left { position: absolute; left: 176px; top: 416px; width: 1420px; z-index: 4; }
+  .chip0 { display: inline-block; font-size: 40px; letter-spacing: .22em; color: #93c5fd; border: 3px solid rgba(147,197,253,.55); padding: 10px 26px; background: rgba(8,14,36,.6); }
+  .logo { margin-top: 0; filter: drop-shadow(0 0 40px rgba(59,130,246,.55)); }
+  .ready { margin-top: 14px; font-size: 54px; letter-spacing: .34em; color: #6c5eb5; font-weight: 700; }
+  .ready b { display: inline-block; width: 34px; height: 50px; background: #a79ef5; margin-left: 16px; vertical-align: -6px; }
+  h1 { margin: 40px 0 0; font-family: "DejaVu Sans", "Inter", sans-serif; font-weight: 800; font-size: 100px; line-height: 1.08; letter-spacing: -.01em; }
+  h1 span { display: block; background: linear-gradient(90deg, #93c5fd, #a79ef5 70%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { margin-top: 32px; font-size: 38px; line-height: 1.45; color: #93a4d4; }
+  .sub b { color: #e2eaff; font-weight: 700; }
+  .chips { margin-top: 34px; display: flex; flex-wrap: wrap; gap: 18px 20px; }
+  .chips span { font-size: 30px; letter-spacing: .08em; padding: 8px 20px; border: 3px solid rgba(167,158,245,.5); color: #cfc9ff; background: rgba(27,20,72,.55); }
+  .chips span.g { border-color: rgba(74,222,128,.55); color: #a7f3c0; }
+  .url { margin-top: 34px; font-size: 46px; color: #60a5fa; letter-spacing: .02em; }
+
+  .shot { position: absolute; border-radius: 26px; border: 4px solid rgba(147,197,253,.38); background-size: 100% 100%; z-index: 2;
+    box-shadow: 0 0 160px rgba(59,130,246,.42), 0 80px 140px rgba(0,0,0,.65); }
+  .main { left: 1660px; top: 480px; width: 1440px; height: 900px; background-image: url(../screenshots/machine.png);
+    transform: perspective(3600px) rotateY(-10deg) rotateX(2deg); transform-origin: 30% 50%; z-index: 2; }
+  .card { left: 2600px; top: 326px; width: 600px; height: 432px; background-image: url(../screenshots/guide-me.png);
+    background-size: 2880px 1800px; background-position: -2243px -108px; transform: rotate(2.2deg); z-index: 5;
+    border-color: rgba(103,232,249,.6); box-shadow: 0 0 120px rgba(103,232,249,.38), 0 60px 120px rgba(0,0,0,.7); }
+  .keys { left: 1560px; top: 1130px; width: 1200px; height: 286px; background-image: url(../screenshots/guide-me.png);
+    background-size: 2560px 1600px; background-position: -576px -1200px; transform: rotate(-1.6deg); z-index: 5;
+    border-color: rgba(74,222,128,.6); box-shadow: 0 0 120px rgba(74,222,128,.34), 0 60px 120px rgba(0,0,0,.7); }
+  .tag { position: absolute; z-index: 6; font-size: 30px; letter-spacing: .14em; padding: 8px 18px; background: rgba(5,10,28,.92); border: 3px solid; }
+  .tag.a { left: 2596px; top: 286px; color: #67e8f9; border-color: rgba(103,232,249,.7); transform: rotate(2.2deg); }
+  .tag.b { left: 1566px; top: 1090px; color: #4ade80; border-color: rgba(74,222,128,.7); transform: rotate(-1.6deg); }
+.note { position: absolute; left: 1660px; top: 1452px; z-index: 6; font-size: 30px; letter-spacing: .18em; color: #6c7fb8; }
+</style></head>
+<body>
+<div class="stage">
+  <div class="dots"></div>
+  <div class="bars top" id="bt"></div>
+  <div class="bars bottom" id="bb"></div>
+
+  <div class="left">
+    <div class="logo" id="logo"></div>
+    <div class="ready">READY.<b></b></div>
+    <h1>A real Commodore 64.<span>A real AI agent<br>at its prompt.</span></h1>
+    <div class="sub">VICE x64sc, cycle exact, inside <b>Omarchy</b>.<br>It watches while you type. Or it types while you watch.<br><b>STOP</b> takes the keyboard back instantly.</div>
+    <div class="chips"><span>GUIDE ME</span><span>DO IT FOR ME</span><span>DRIVE MODE</span><span>THE HUB</span><span class="g">OPEN SOURCE</span></div>
+    <div class="url">github.com/nixfred/nix64</div>
+  </div>
+
+  <div class="shot main"></div>
+  <div class="tag a">THE ASSISTANT, GUIDING</div><div class="shot card"></div>
+  <div class="note">REAL SCREENSHOTS. NOTHING MOCKED UP.</div>
+  <div class="tag b">THE NEXT KEY LIGHTS UP</div><div class="shot keys"></div>
+</div>
+<script>
+  // the raster bars: the sixteen C64 colours in palette order, as loading stripes
+  const pal = ["#000000","#ffffff","#68372b","#70a4b2","#6f3d86","#588d43","#352879","#b8c76f","#6f4f25","#433900","#9a6759","#444444","#6c6c6c","#9ad284","#6c5eb5","#959595"];
+  for (const id of ["bt", "bb"]) document.getElementById(id).innerHTML = pal.map((c) => `<i style="background:${c}"></i>`).join("");
+  // the pixel logo, same glyphs as the app
+  const G = { N:["10001","11001","11001","10101","10011","10011","10001"], I:["11111","00100","00100","00100","00100","00100","11111"], X:["10001","10001","01010","00100","01010","10001","10001"], 6:["01110","10000","10000","11110","10001","10001","01110"], 4:["00110","01010","10010","10010","11111","00010","00010"] };
+  const px = 26, pitch = 6 * px; let x = 0, r = "";
+  const glyph = (ch, fill) => { G[ch].forEach((row, y) => [...row].forEach((c, i) => { if (c === "1") r += `<rect x="${x + i * px}" y="${y * px}" width="${px - 3}" height="${px - 3}" rx="2" fill="${fill}"/>`; })); x += pitch; };
+  for (const ch of "NIX") glyph(ch, "url(#a)"); x += px * 2; for (const ch of "64") glyph(ch, "url(#b)");
+  document.getElementById("logo").innerHTML = `<svg viewBox="0 0 ${x - px} ${7 * px}" width="${x - px}" height="${7 * px}"><defs><linearGradient id="a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dbeafe"/><stop offset=".55" stop-color="#93c5fd"/><stop offset="1" stop-color="#3b82f6"/></linearGradient><linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e0dcff"/><stop offset=".55" stop-color="#a79ef5"/><stop offset="1" stop-color="#6c5eb5"/></linearGradient></defs>${r}</svg>`;
+</script>
+</body></html>
