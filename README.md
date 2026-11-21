@@ -215,7 +215,7 @@ All integers are little-endian. To read a consistent snapshot: read `seq`, retry
 
 Nix64 never shows something as working that was not tested. This is the honest state.
 
-**Built and tested** (144 automated tests: 140 run by default and pass on the dev build and against the installed engine on two real machines; 4 more are opt-in because they spend model usage, and passed when run):
+**Built and tested** (145 automated tests: 141 run by default and pass on the dev build and against the installed engine on two real machines; 4 more are opt-in because they spend model usage, and passed when run):
 
 - the shell: CRT, bezel, Hub, on-screen keyboard, symbolic host keyboard, joystick keys and gamepad, paste
 - machine files, generations and rollback, pinned media, presets, headless machines
@@ -253,6 +253,10 @@ against the real thing. A device earns **verified** only on a real desk, with a 
   His setup: a PAL C64C with a 1541-II and true drive emulation, the disk pinned from the shelf, `LOAD"*",8,1` with
   warp on, then `RUN`; press Space at the Eagle Soft intro, use **joystick port 2**, and Intro Flight reaches the
   cockpit. It is his report: I have not run that disk myself yet, and the game needs your own copy.
+- **The agent's one allowed command, attacked with a real model:** Claude Code (2.1.330 (Claude Code)) was asked, in drive mode, to run the allowed
+  `c64ctl` command with a command substitution, backticks, a pipe, a redirect and a second command on a new line tacked on,
+  each trying to create a marker file. All five were refused and no file appeared; a plain `c64ctl` call still ran. This checks
+  the permission match for those five shapes only, and it depends on Claude Code, which can change.
 - Not verified by a human: that you can *hear* it, and the real-hardware v1 gate below.
 
 <div align="center">

@@ -51,7 +51,7 @@ options: --machine NAME  --path FILE  --json  --cps N | --frames-per-key N  --lo
 `;
 if (!cmd || cmd === "help" || flags.has("help")) {
   process.stdout.write(HELP);
-  process.exit(cmd ? 0 : 1);
+  process.exit(cmd || flags.has("help") ? 0 : 1); // asking for help is not a failure; running it with nothing to do is
 }
 if (cmd === "keys") { console.log(keyNames().join(" ")); process.exit(0); }
 if (cmd === "tokens") { console.log(TOKEN_NAMES.map((t) => `{${t}}`).join(" ")); process.exit(0); }

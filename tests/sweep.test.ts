@@ -149,6 +149,11 @@ describe("c64ctl refuses numbers it cannot use", () => {
   h.write("NIX64TEL", 0); h.writeUInt32LE(2, 8);
   writeFileSync(file, h);
   const run = (...args: string[]) => Bun.spawnSync(["bun", join(import.meta.dir, "../bin/c64ctl.ts"), "--path", file, ...args], { env: { ...process.env, NIX64_CPS: "abc" } });
+  test("asking for help is not a failure (an agent's tool result was flagged as an error)", () => {
+    expect(run("--help").exitCode).toBe(0);
+    expect(run("help").exitCode).toBe(0);
+    expect(Bun.spawnSync(["bun", join(import.meta.dir, "../bin/c64ctl.ts")]).exitCode).toBe(1); // nothing asked for
+  });
   test("--timeout 30s is an error at once, not a wait that never ends", () => {
     const t = Date.now();
     const r = run("wait", "NEVER", "--timeout", "30s");
