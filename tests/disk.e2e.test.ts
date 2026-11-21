@@ -16,7 +16,7 @@ process.env.NIX64_UI = join(home, "ui");
 const suite = X64SC ? describe : describe.skip;
 const { createHub } = await import("../src/server");
 const { readDir } = await import("../src/d64");
-const { paths, diskPath: _ } = { ...(await import("../src/paths")), diskPath: null };
+const { paths } = await import("../src/paths"); // bun runs every test file in one process: use the paths the code really uses
 const { diskPath, diskHistory } = await import("../src/engine");
 
 suite("disks", () => {
@@ -73,7 +73,7 @@ suite("disks", () => {
     const h = diskHistory("dk", "8");
     expect(h.length).toBeGreaterThan(before);
     // put the first state back through the API and the program is on the disk again
-    const withProgram = (await Promise.all(h.map(async (x) => ({ x, d: readDir(readFileSync(join(home, "data/machines/dk/history/8", x.file))) })))).find((y) => y.d?.entries.some((e) => e.name === "HELLO"));
+    const withProgram = (await Promise.all(h.map(async (x) => ({ x, d: readDir(readFileSync(join(paths.data, "machines/dk/history/8", x.file))) })))).find((y) => y.d?.entries.some((e) => e.name === "HELLO"));
     expect(withProgram).toBeDefined();
     expect((await api("/api/machines/dk/drives/8/restore", { file: withProgram!.x.file })).status).toBe(200);
     expect(readDir(readFileSync(diskPath("dk", "8")))!.entries.some((e) => e.name === "HELLO")).toBe(true);

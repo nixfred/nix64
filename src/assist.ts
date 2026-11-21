@@ -108,7 +108,7 @@ export class Assist {
     // brand new machine, nobody has touched it
     if (!this.lessonOffered && now - this.bootedAt > 40_000 && now - this.lastChange > 30_000 && rows.filter(Boolean).length <= 4) this.onNewcomer();
 
-    if (this.guide) this.stepGuide(rows, cur);
+    if (this.guide) { this.freshGuide = false; this.stepGuide(rows, cur); }
     this.lastRows = rows;
   }
 
@@ -191,8 +191,9 @@ export class Assist {
     this.guide = { keys: [], text: "", idx: 0, total: lines.length, line: lines[0], done: false };
     this.armed = false;
     this.live.say("note", "Guiding you: type each line yourself, the next key lights up on the keyboard below. Press Stop guiding any time.");
-    this.stepGuide(this.lastRows, this.lastCursor);
+    this.freshGuide = true; // the first step is worked out from the very next look at the screen, not from a stale one
   }
+  private freshGuide = false;
 
   stopGuide(): void {
     if (!this.guide) return;
