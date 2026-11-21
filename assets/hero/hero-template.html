@@ -1,0 +1,222 @@
+<!doctype html>
+<!-- HOW TO RENDER: replace the text /*FRAME*/ in the script tag at the bottom with the contents of c64-frame.json (a real frame
+     published by a running engine: a BASIC program typed on the machine draws the tunnel and the NIX64 plate), then
+     chromium --headless=new --use-angle=swiftshader --use-gl=angle --enable-unsafe-swiftshader --window-size=3200,1800 --screenshot=out.png file://...
+     (window 3200x1280 gives the 5:2 crop, 3200x1067 the 3:1: the stage centres itself). -->
+<html><head><meta charset="utf-8"><title>Nix64 hero</title>
+<style>
+  /* HERO, 3200x1800 master. The important things sit in the centre band (y 360 to 1440) so a 5:2 or 3:1 crop of the
+     middle keeps them. The stage centres itself vertically in any window. The picture on the tube is a REAL frame
+     published by the engine (a BASIC program typed on a running machine); everything else is light. */
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #02040d; }
+  .stage { position: absolute; left: 0; top: 50%; width: 3200px; height: 1800px; transform: translateY(-50%); overflow: hidden; background: #02040d;
+    font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; color: #e8eeff; }
+  canvas, .layer { position: absolute; left: 0; top: 0; }
+  #bg, #fx, #parts { width: 3200px; height: 1800px; }
+
+  /* the monitor */
+  .rig { position: absolute; left: 1220px; top: 250px; width: 1700px; height: 1320px; transform-style: preserve-3d;
+    transform: perspective(3600px) rotateY(-13deg) rotateX(3deg) rotateZ(-1.2deg); }
+  .glow { position: absolute; left: -380px; top: -300px; width: 2460px; height: 1920px; filter: blur(150px) saturate(2.4) brightness(1.15); opacity: .95; border-radius: 60px; }
+  .body { position: absolute; inset: 0; border-radius: 96px;
+    background: linear-gradient(150deg, #3a416f 0%, #1a2048 34%, #0b0f2c 70%, #05071a 100%);
+    box-shadow: inset 0 3px 0 rgba(255,255,255,.28), inset 0 0 0 4px rgba(147,197,253,.22), inset 0 -40px 90px rgba(0,0,0,.65), 0 0 0 3px rgba(147,197,253,.35), 0 0 120px rgba(103,232,249,.35), 0 120px 200px rgba(0,0,0,.8); }
+  .spillwrap { position: absolute; inset: 0; border-radius: 96px; overflow: hidden; }
+  #spill { position: absolute; left: -200px; top: -150px; width: 2100px; height: 1620px; filter: blur(80px) saturate(2.2) brightness(1.2); mix-blend-mode: screen; opacity: .6; }
+  .body::before { content: ""; position: absolute; inset: 26px; border-radius: 74px; background: linear-gradient(160deg, #0d1233, #04061a); box-shadow: inset 0 0 0 3px rgba(147,197,253,.16), inset 0 14px 40px rgba(0,0,0,.8); }
+  #tube { position: absolute; left: 118px; top: 150px; width: 1464px; height: 1000px; border-radius: 60px / 70px; box-shadow: 0 0 0 10px #02030c, 0 0 0 14px rgba(147,197,253,.3), 0 0 200px rgba(108,94,181,.9); }
+  .glare { position: absolute; left: 118px; top: 150px; width: 1464px; height: 1000px; border-radius: 60px / 70px; pointer-events: none;
+    background: linear-gradient(118deg, rgba(255,255,255,.34) 0%, rgba(255,255,255,.08) 22%, rgba(255,255,255,0) 40%), radial-gradient(ellipse at 28% 18%, rgba(255,255,255,.2), transparent 38%); mix-blend-mode: screen; }
+  .badge { position: absolute; left: 0; right: 0; bottom: 52px; text-align: center; font-size: 34px; letter-spacing: .6em; color: #6c7fc4; font-weight: 700; }
+  .led { position: absolute; right: 150px; bottom: 54px; width: 22px; height: 22px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 30px #4ade80, 0 0 80px #4ade80; }
+
+  /* keycaps in the foreground */
+  .keyrig { position: absolute; left: 0; top: 0; width: 3200px; height: 1800px; pointer-events: none; }
+  .cap { position: absolute; border-radius: 34px; font-weight: 800; display: grid; place-items: center; text-align: center; line-height: 1;
+    background: linear-gradient(160deg, var(--a), var(--b)); color: var(--t);
+    box-shadow: inset 0 6px 0 rgba(255,255,255,.35), inset 0 -16px 28px rgba(0,0,0,.4), 0 26px 0 var(--s), 0 40px 80px rgba(0,0,0,.7), 0 0 var(--g) var(--c); }
+  .cap small { display: block; font-size: .3em; letter-spacing: .12em; margin-top: 10px; opacity: .85; }
+
+  /* the type */
+  .copy { position: absolute; left: 168px; top: 396px; width: 1300px; z-index: 10; }
+  .eyebrow { font-size: 36px; letter-spacing: .38em; color: #67e8f9; text-shadow: 0 0 30px rgba(103,232,249,.7); }
+  .logo { position: relative; margin-top: 34px; height: 250px; }
+  .logo svg { position: absolute; left: 0; top: 0; }
+  .logo .r { filter: drop-shadow(0 0 0 #f0f); transform: translate(-9px, 0); mix-blend-mode: screen; opacity: .9; }
+  .logo .c { transform: translate(9px, 0); mix-blend-mode: screen; opacity: .9; }
+  .logo .m { filter: drop-shadow(0 0 40px rgba(96,165,250,.9)) drop-shadow(0 0 120px rgba(167,158,245,.7)); }
+  h1 { margin: 40px 0 0; font-family: "JetBrains Mono NL", "JetBrains Mono", monospace; font-weight: 800; font-size: 128px; line-height: 1.02; letter-spacing: -.02em; text-transform: uppercase; }
+  h1 .w { display: block; color: #fff; text-shadow: 0 0 60px rgba(255,255,255,.35), 0 8px 0 rgba(0,0,0,.45); }
+  h1 .g { display: block; background: linear-gradient(90deg, #7dd3fc, #a79ef5 55%, #f0abfc); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 40px rgba(167,158,245,.55)) drop-shadow(0 8px 0 rgba(0,0,0,.45)); }
+  .sub { margin-top: 44px; font-size: 46px; line-height: 1.4; color: #b7c3ee; text-shadow: 0 4px 20px #02040d; }
+  .sub b { color: #fff; }
+  .url { margin-top: 36px; font-size: 44px; color: #60a5fa; text-shadow: 0 0 40px rgba(96,165,250,.7); letter-spacing: .02em; }
+
+  .feed { position: absolute; left: 2250px; top: 262px; width: 780px; z-index: 12; padding: 28px 32px 30px; border-radius: 34px; transform: perspective(2400px) rotateY(-10deg) rotateZ(1.6deg);
+    background: linear-gradient(160deg, rgba(30,44,110,.78), rgba(10,16,48,.82)); border: 3px solid rgba(103,232,249,.55); backdrop-filter: blur(30px);
+    box-shadow: 0 0 140px rgba(103,232,249,.45), 0 60px 120px rgba(0,0,0,.65), inset 0 3px 0 rgba(255,255,255,.18); }
+  .feed .h { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; font-size: 30px; letter-spacing: .2em; color: #93c5fd; margin-bottom: 14px; }
+  .feed .h i { width: 18px; height: 18px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 24px #4ade80; }
+  .feed .h em { flex-basis: 100%; font-style: normal; color: #6c7fc4; font-size: 22px; letter-spacing: .16em; padding-left: 34px; }
+  .feed .row { display: grid; grid-template-columns: 150px 1fr; gap: 20px; margin-top: 18px; font-size: 32px; line-height: 1.32; color: #dbe6ff; font-family: "DejaVu Sans", sans-serif; }
+  .feed .tag { font-family: "JetBrains Mono", monospace; font-size: 24px; letter-spacing: .08em; font-weight: 800; padding: 6px 0; text-align: center; border: 3px solid; align-self: start; }
+  .feed .t1 { color: #4ade80; border-color: rgba(74,222,128,.6); } .feed .t2 { color: #93c5fd; border-color: rgba(147,197,253,.55); }
+  .feed code { font-family: "JetBrains Mono", monospace; background: rgba(0,0,0,.4); padding: 2px 8px; color: #67e8f9; font-size: 28px; }
+  .feed .via { color: #6c7fc4; font: 22px "JetBrains Mono", monospace; }
+  .grain { position: absolute; inset: 0; z-index: 20; pointer-events: none; mix-blend-mode: overlay; opacity: .22; }
+  .scan { position: absolute; inset: 0; z-index: 21; pointer-events: none; background: repeating-linear-gradient(180deg, rgba(0,0,0,.16) 0 2px, transparent 2px 6px); }
+  .vig { position: absolute; inset: 0; z-index: 22; pointer-events: none; background: radial-gradient(ellipse at 55% 50%, transparent 52%, rgba(0,0,0,.62) 100%); }
+</style></head>
+<body>
+<div class="stage">
+  <canvas id="bg" width="3200" height="1800"></canvas>
+  <canvas id="fx" width="3200" height="1800"></canvas>
+
+  <div class="rig">
+    <canvas class="glow" id="glow" width="96" height="72"></canvas>
+    <div class="body"></div>
+    <div class="spillwrap"><canvas id="spill" width="96" height="72"></canvas></div>
+    <canvas id="tube" width="1464" height="1000"></canvas>
+    <div class="glare"></div>
+    <div class="badge">NIX64</div><div class="led"></div>
+  </div>
+
+  <div class="keyrig">
+    <div class="cap" style="left:1390px;top:1190px;width:330px;height:300px;font-size:92px;--a:#fb7185;--b:#be123c;--s:#7f1230;--t:#fff;--c:rgba(251,113,133,1);--g:230px;transform:perspective(1800px) rotateX(36deg) rotateZ(-8deg)">STOP<small>TAKES IT BACK</small></div>
+    <div class="cap" style="left:1760px;top:1310px;width:270px;height:270px;font-size:120px;--a:#4ade80;--b:#15803d;--s:#0c4a25;--t:#fff;--c:rgba(74,222,128,.95);--g:150px;transform:perspective(1800px) rotateX(36deg) rotateZ(5deg)">4<small>$</small></div>
+    <div class="cap" style="left:2090px;top:1300px;width:560px;height:250px;font-size:76px;--a:#5b6bd6;--b:#232a77;--s:#10143f;--t:#dfe6ff;--c:rgba(96,165,250,.6);--g:90px;transform:perspective(1800px) rotateX(36deg) rotateZ(-4deg)">RETURN</div>
+    <div class="cap" style="left:2770px;top:1230px;width:250px;height:250px;font-size:86px;--a:#a79ef5;--b:#4c3f9e;--s:#241c55;--t:#fff;--c:rgba(167,158,245,.7);--g:110px;transform:perspective(1800px) rotateX(36deg) rotateZ(9deg);filter:blur(2px)">C=</div>
+  </div>
+
+  <canvas id="parts" width="3200" height="1800"></canvas>
+
+  <div class="feed">
+    <div class="h"><i></i>CLAUDE CODE DRIVING<em>THE REAL FEED FROM A REAL RUN</em></div>
+    <div class="row"><span class="tag t1">ON C64</span><span>Typed <code>10 FOR I=1 TO 3: PRINT "ZEBRA": NEXT</code> and pressed RETURN. <span class="via">via keyboard</span></span></div>
+    <div class="row"><span class="tag t1">ON C64</span><span>Typed <code>RUN</code> and pressed RETURN. <span class="via">via keyboard</span></span></div>
+    <div class="row"><span class="tag t2">AGENT</span><span>The screen shows ZEBRA printed on three separate lines.</span></div>
+  </div>
+
+  <div class="copy">
+    <div class="eyebrow">OPEN SOURCE &nbsp;/&nbsp; OMARCHY</div>
+    <div class="logo" id="logo"></div>
+    <h1><span class="w">A real AI agent</span><span class="g">at its prompt.</span></h1>
+    <div class="sub">A real <b>Commodore 64</b>, cycle exact.<br>It watches. It types. <b>STOP</b> is instant.</div>
+    <div class="url">github.com/nixfred/nix64</div>
+  </div>
+
+  <svg class="grain" width="3200" height="1800"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .5  0 0 0 0 .5  0 0 0 0 .5  0 0 0 1.2 -.1"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>
+  <div class="scan"></div><div class="vig"></div>
+</div>
+
+<script type="application/json" id="frame">/*FRAME*/</script>
+<script>
+const FRAME = JSON.parse(document.getElementById("frame").textContent);
+const pix = Uint8Array.from(atob(FRAME.pix), (c) => c.charCodeAt(0));
+const PAL = ["#000000","#ffffff","#68372b","#70a4b2","#6f3d86","#588d43","#352879","#b8c76f","#6f4f25","#433900","#9a6759","#444444","#6c6c6c","#9ad284","#6c5eb5","#959595"];
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rnd = mulberry(64);
+const CX = 2090, CY = 880;
+
+// ---------- the REAL frame, as RGBA ----------
+const rgba = new Uint8Array(FRAME.w * FRAME.h * 4);
+for (let i = 0; i < pix.length; i++) { const c = FRAME.pal[pix[i] & 15]; rgba.set([c[0], c[1], c[2], 255], i * 4); }
+
+// ---------- the tube: our CRT shader on the real pixels ----------
+{
+  const cv = document.getElementById("tube"), gl = cv.getContext("webgl", { antialias: true, preserveDrawingBuffer: true });
+  const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+  const p = gl.createProgram();
+  gl.attachShader(p, sh(gl.VERTEX_SHADER, "attribute vec2 p; varying vec2 uv; void main(){ uv = vec2(p.x*.5+.5, .5-p.y*.5); gl_Position = vec4(p,0.,1.); }"));
+  gl.attachShader(p, sh(gl.FRAGMENT_SHADER, `precision highp float; varying vec2 uv; uniform sampler2D tex; uniform vec2 size; uniform float k; uniform vec4 crop;
+    vec2 warp(vec2 u){ vec2 c=u*2.-1.; c*= (1.+.10*k*dot(c,c)); return c*.5+.5; }
+    vec3 s(vec2 u){ return texture2D(tex,u).rgb; }
+    void main(){ vec2 w = warp(uv); if(w.x<0.||w.x>1.||w.y<0.||w.y>1.){ gl_FragColor=vec4(0.,0.,0.,1.); return; }
+      vec2 u = crop.xy + w*(crop.zw-crop.xy);
+      vec2 px = u*size, t = 1./size;
+      vec3 c = s(u);
+      vec3 g = (s(u+vec2(t.x,0.))+s(u-vec2(t.x,0.)))*.25 + (s(u+vec2(2.*t.x,0.))+s(u-vec2(2.*t.x,0.)))*.125 + (s(u+vec2(0.,t.y))+s(u-vec2(0.,t.y)))*.12;
+      c = mix(c, c*.6+g*.8, .5*k);
+      c *= 1. - k*.42*(.5+.5*cos(6.2831853*px.y));
+      float m = mod(gl_FragCoord.x,3.); vec3 mask = m<1.?vec3(1.,.72,.72):(m<2.?vec3(.72,1.,.72):vec3(.72,.72,1.)); c *= mix(vec3(1.),mask,.38*k);
+      vec2 v = uv-.5; c *= 1.-.55*k*dot(v,v)*2.; c *= 1.32; c = pow(clamp(c,0.,1.),vec3(.92));
+      gl_FragColor = vec4(c,1.); }`));
+  gl.linkProgram(p); gl.useProgram(p);
+  const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,1,1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(p, "p"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const tx = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tx);
+  for (const [a, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, a, v);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, FRAME.w, FRAME.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+  gl.viewport(0, 0, cv.width, cv.height);
+  gl.uniform2f(gl.getUniformLocation(p, "size"), FRAME.w, FRAME.h); gl.uniform1f(gl.getUniformLocation(p, "k"), 0.95); gl.uniform1i(gl.getUniformLocation(p, "tex"), 0); gl.uniform4f(gl.getUniformLocation(p, "crop"), 22/384, 27/272, 362/384, 245/272);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+// ---------- the light the screen throws: a tiny copy of the frame, blown up and blurred ----------
+{
+  const cv = document.getElementById("glow"), x = cv.getContext("2d");
+  const t = document.createElement("canvas"); t.width = FRAME.w; t.height = FRAME.h; t.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(rgba), FRAME.w, FRAME.h), 0, 0);
+  x.imageSmoothingEnabled = true; x.drawImage(t, 20, 14, 56, 44);
+  const s = document.getElementById("spill").getContext("2d"); s.imageSmoothingEnabled = true; s.drawImage(t, 22, 16, 52, 40);
+}
+
+// ---------- the room: background, rays, loader stripes, floor ----------
+{
+  const c = document.getElementById("bg"), x = c.getContext("2d");
+  let g = x.createLinearGradient(0, 0, 0, 1800); g.addColorStop(0, "#01030a"); g.addColorStop(.45, "#070c2c"); g.addColorStop(1, "#14093a"); x.fillStyle = g; x.fillRect(0, 0, 3200, 1800);
+  for (const [px, py, r, col] of [[CX, CY, 1500, "rgba(108,94,181,.62)"], [CX, CY, 900, "rgba(96,165,250,.38)"], [300, 120, 1300, "rgba(59,130,246,.30)"], [3000, 1700, 1100, "rgba(240,171,252,.18)"]]) {
+    g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, col); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, 3200, 1800); }
+  // volumetric rays out of the screen
+  x.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 90; i++) { const a = rnd() * Math.PI * 2, w = .01 + rnd() * .05, len = 1800 + rnd() * 1400;
+    g = x.createLinearGradient(CX, CY, CX + Math.cos(a) * len, CY + Math.sin(a) * len); const col = PAL[2 + Math.floor(rnd() * 14)];
+    g.addColorStop(0, col + "55"); g.addColorStop(.6, col + "14"); g.addColorStop(1, col + "00"); x.fillStyle = g;
+    x.beginPath(); x.moveTo(CX, CY); x.lineTo(CX + Math.cos(a - w) * len, CY + Math.sin(a - w) * len); x.lineTo(CX + Math.cos(a + w) * len, CY + Math.sin(a + w) * len); x.closePath(); x.fill(); }
+  // the floor: a neon grid in perspective, the horizon right behind the keys
+  const H = 1310; x.save(); x.beginPath(); x.rect(0, H, 3200, 600); x.clip();
+  x.lineWidth = 3;
+  for (let i = -40; i <= 40; i++) { const bx = CX + i * 230; g = x.createLinearGradient(0, H, 0, 1800); g.addColorStop(0, "rgba(167,158,245,0)"); g.addColorStop(.35, "rgba(103,232,249,.55)"); g.addColorStop(1, "rgba(240,171,252,.7)"); x.strokeStyle = g; x.beginPath(); x.moveTo(CX + (bx - CX) * .08, H); x.lineTo(CX + (bx - CX) * 2.4, 1800); x.stroke(); }
+  for (let t = 0; t < 1; t += .075) { const y = H + t * t * 490 + 4; g = x.createLinearGradient(0, 0, 3200, 0); g.addColorStop(0, "rgba(103,232,249,0)"); g.addColorStop(.5, "rgba(103,232,249," + (.15 + t * .6) + ")"); g.addColorStop(1, "rgba(103,232,249,0)"); x.strokeStyle = g; x.beginPath(); x.moveTo(0, y); x.lineTo(3200, y); x.stroke(); }
+  x.restore();
+}
+
+// ---------- the loader stripes: the sixteen colours bursting out of the screen ----------
+{
+  const c = document.getElementById("fx"), x = c.getContext("2d");
+  const bands = (blur, alpha, spread, leftAlpha) => {
+    x.save(); x.filter = `blur(${blur}px)`; x.globalCompositeOperation = "lighter";
+    const cols = [1, 3, 7, 13, 14, 5, 4, 10, 2, 8, 6, 15, 12, 11, 9, 0];
+    cols.forEach((ci, i) => { const f = i - 7.5, col = PAL[ci === 0 ? 1 : ci];
+      for (const dir of [1, -1]) { const a = dir === 1 ? alpha : leftAlpha, far = dir === 1 ? 3400 : -400, tipX = CX + dir * 700;
+        const g = x.createLinearGradient(tipX, 0, far, 0); g.addColorStop(0, col + "00"); g.addColorStop(.12, col); g.addColorStop(.8, col + "55"); g.addColorStop(1, col + "00");
+        x.globalAlpha = a; x.fillStyle = g; x.beginPath();
+        x.moveTo(tipX, CY + f * 9); x.lineTo(far, CY + f * spread - 20 - Math.abs(f) * 4); x.lineTo(far, CY + f * spread + 36 + Math.abs(f) * 4); x.lineTo(tipX, CY + f * 9 + 16); x.closePath(); x.fill(); } });
+    x.restore(); };
+  bands(34, .8, 70, .22); bands(8, .95, 66, .3); bands(1.5, .5, 64, .1);
+  // a hard white-hot core line through the burst
+  x.save(); x.globalCompositeOperation = "lighter"; const g = x.createLinearGradient(CX, 0, 3400, 0); g.addColorStop(0, "rgba(255,255,255,.0)"); g.addColorStop(.1, "rgba(255,255,255,.9)"); g.addColorStop(1, "rgba(255,255,255,0)"); x.fillStyle = g; x.fillRect(CX + 600, CY - 3, 1200, 6); x.restore();
+}
+
+// ---------- pixels everywhere: C64 colours, some sharp, some out of focus ----------
+{
+  const c = document.getElementById("parts"), x = c.getContext("2d");
+  const cols = PAL.slice(2).filter((_, i) => i !== 9);
+  for (const [n, smin, smax, blur, alpha] of [[170, 6, 30, 0, .95], [60, 30, 90, 14, .55], [18, 100, 260, 40, .38]]) {
+    x.save(); x.filter = blur ? `blur(${blur}px)` : "none"; x.globalCompositeOperation = "lighter";
+    for (let i = 0; i < n; i++) { const a = rnd() * Math.PI * 2, d = 650 + Math.pow(rnd(), .7) * 1900, px = CX + Math.cos(a) * d * 1.25, py = CY + Math.sin(a) * d * .62, s = smin + rnd() * (smax - smin);
+      if (px < 1500 && py > 380 && py < 1300 && px < 1650) continue; // keep the headline clean
+      x.globalAlpha = alpha * (.4 + rnd() * .6); x.fillStyle = cols[Math.floor(rnd() * cols.length)]; x.fillRect(Math.round(px / 6) * 6, Math.round(py / 6) * 6, s, s); }
+    x.restore(); }
+}
+
+// ---------- the pixel logo, with a split colour fringe ----------
+{
+  const G = { N:["10001","11001","11001","10101","10011","10011","10001"], I:["11111","00100","00100","00100","00100","00100","11111"], X:["10001","10001","01010","00100","01010","10001","10001"], 6:["01110","10000","10000","11110","10001","10001","01110"], 4:["00110","01010","10010","10010","11111","00010","00010"] };
+  const px = 36, pitch = 6 * px;
+  const make = (cls, fillA, fillB) => { let x = 0, r = ""; const gl = (ch, f) => { G[ch].forEach((row, y) => [...row].forEach((c, i) => { if (c === "1") r += `<rect x="${x + i * px}" y="${y * px}" width="${px - 4}" height="${px - 4}" rx="3" fill="${f}"/>`; })); x += pitch; };
+    for (const ch of "NIX") gl(ch, fillA); x += px * 2; for (const ch of "64") gl(ch, fillB);
+    return `<svg class="${cls}" viewBox="0 0 ${x - px} ${7 * px}" width="${x - px}" height="${7 * px}"><defs><linearGradient id="a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0f9ff"/><stop offset=".5" stop-color="#93c5fd"/><stop offset="1" stop-color="#3b82f6"/></linearGradient><linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5f3ff"/><stop offset=".5" stop-color="#a79ef5"/><stop offset="1" stop-color="#6c5eb5"/></linearGradient></defs>${r}</svg>`; };
+  document.getElementById("logo").innerHTML = make("r", "#ff2bd6", "#ff2bd6") + make("c", "#00e5ff", "#00e5ff") + make("m", "url(#a)", "url(#b)");
+}
+</script>
+</body></html>
