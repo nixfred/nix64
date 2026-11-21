@@ -6,7 +6,7 @@
 # The engine (VICE with the Nix64 patches) is the separate nix64-vice package, built from source too.
 pkgname=nix64
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Nix64: a real Commodore 64 platform: machines as files, a shell, and an AI agent beside the real machine'
 arch=(any)
 license=(GPL-2.0-or-later)
