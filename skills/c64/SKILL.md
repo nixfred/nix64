@@ -44,6 +44,9 @@ Read the screen after every step. A line starting with `?` is a BASIC error (`?S
 | `c64ctl key NAME...` | press keys together (a chord), e.g. `key stop`, `key shift stop`, `key cbm shift` |
 | `c64ctl joy PORT SPEC` | hold a stick for a moment: `joy 2 up+fire --hold 10`. `--set` holds it until changed |
 | `c64ctl wait TEXT` | wait until TEXT is on screen. `--timeout SECONDS`. Exit 3 on timeout |
+| `c64ctl restore` | press RESTORE (it is not in the keyboard matrix, so `key` cannot) |
+| `c64ctl warp on\|off` | run as fast as the computer allows, e.g. while a program loads; switch it off again after |
+| `c64ctl flush` | throw away everything queued and let go of every key and stick |
 | `c64ctl peek ADDR [LEN]` | hexdump RAM: `peek 0x0400 40` (screen), `peek '$0801' 32` (BASIC program). RAM only: the I/O chips (VIC, SID, CIA) and ROMs are not in it |
 | `c64ctl keys` / `tokens` | list key names and `{TOKENS}` |
 
@@ -72,8 +75,9 @@ reverse video `{RVS} {RVSOFF}`, colours `{BLK} {WHT} {RED} {CYN} {PUR} {GRN} {BL
   to be read. There is no polling cost: look as often as you like.
 - **The default video standard is PAL** until a machine file says otherwise, so 50 frames a second.
 
-## Not built yet (do not promise these)
+## What you cannot do from here
 
-Disk and tape handling, loading programs from the shelf, the BBS phone book, saving a project folder,
-and the assist/ghost-text mode. If the user asks, say it is not built yet and offer what does work:
-typing BASIC, running it, reading the screen, keys and joysticks.
+Putting disks in drives, tapes and cartridges is done by the user in the Nix64 shell (shelf, drag onto a
+drive). You can LOAD from whatever is in the drive: type `LOAD"$",8` and `LIST` to see the directory, then
+`LOAD"NAME",8,1` and `RUN`. You cannot make files appear on the machine except by typing them. The BBS
+phone book is not built yet: if the user asks to dial, say so.

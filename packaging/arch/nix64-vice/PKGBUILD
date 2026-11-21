@@ -18,10 +18,10 @@ pkgdesc='Nix64 engine: VICE x64sc (SDL2) with the Nix64 telemetry, input, video 
 arch=(x86_64)
 license=(GPL-2.0-or-later)
 url='https://github.com/nixfred/nix64'
-depends=(alsa-lib giflib libpng libpulse libusb sdl2 sdl2_image)
-makedepends=(dos2unix glew glib2-devel libevdev libjpeg-turbo libpcap libxaw python xa xdg-utils
+depends=(alsa-lib curl giflib libpcap libpng libpulse libusb sdl2 sdl2_image)
+makedepends=(dos2unix glew glib2-devel libevdev libjpeg-turbo libxaw python xa xdg-utils
              xorg-bdftopcf xorg-mkfontscale)
-optdepends=('libpcap: Ethernet cartridges on a real network card')
+optdepends=('opencbm: real disk drives on a ZoomFloppy / XUM1541 (AUR)')
 source=("https://downloads.sourceforge.net/project/vice-emu/releases/vice-$_vice.tar.gz"
         disable-fc-cache.patch
         0001-nix64-telemetry.patch
@@ -57,6 +57,8 @@ build() {
     --disable-gtk3ui \
     --enable-sdl2ui \
     --with-gif \
+    --with-libcurl \
+    --enable-ethernet \
     --prefix=/usr/lib/nix64 \
     --libdir=/usr/lib/nix64/lib
   make

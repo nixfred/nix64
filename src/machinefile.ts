@@ -280,12 +280,27 @@ export function rollback(name: string, n: number): Generation {
   return gen;
 }
 
-export function createMachine(name: string, description?: string): void {
+/** Starting points for a new machine: small edits of the stock file, nothing the file cannot already say. */
+export const PRESETS: Record<string, { description: string; edit: (t: string) => string }> = {
+  "c64c-pal": { description: "A stock Commodore 64C, PAL, with a 1541-II.", edit: (t) => t },
+  "breadbin-pal": {
+    description: "The 1982 breadbin C64, PAL, 6581 SID, a 1541.",
+    edit: (t) => t.replace('model  = "c64c"', 'model  = "c64"').replace('type = "1541-II"', 'type = "1541"'),
+  },
+  "c64c-ntsc": { description: "A Commodore 64C for the USA: NTSC, 60 Hz, 1541-II.", edit: (t) => t.replace('region = "pal" ', 'region = "ntsc"') },
+  gs: {
+    description: "The C64 Games System: NTSC, cartridges, no drive.",
+    edit: (t) => t.replace('model  = "c64c"', 'model  = "c64gs"').replace('region = "pal" ', 'region = "ntsc"').replace(/\[drive\.8\]\ntype = "1541-II"[^\n]*\nmode = "image"[^\n]*/, '[drive.8]\nmode = "none"'),
+  },
+};
+
+export function createMachine(name: string, description?: string, preset = "c64c-pal"): void {
   if (!validName(name)) throw new MachineFileError([`"${name}" is not a usable machine name (lowercase letters, digits, . _ -)`]);
   const f = machineFile(name);
   if (existsSync(f)) throw new MachineFileError([`machine "${name}" already exists`]);
+  const p = PRESETS[preset] ?? PRESETS["c64c-pal"];
   mkdirSync(join(paths.config, "machines"), { recursive: true });
-  writeFileSync(f, TEMPLATE(name, description));
+  writeFileSync(f, p.edit(TEMPLATE(name, description ?? p.description)));
   mkdirSync(machineDir(name), { recursive: true });
 }
 
@@ -342,7 +357,9 @@ export function engineArgs(def: MachineDef, rt: EngineRuntime): string[] {
   if (rt.tapeFile) a.push("-1", rt.tapeFile);
   if (rt.cartFile) a.push("-cartcrt", rt.cartFile);
   if (def.devices.reu.enabled) a.push("-reu", "-reusize", String(def.devices.reu.size));
-  if (def.devices.modem.enabled) a.push("-acia1", "-rsdev1ip232");
+  // RS232 modem on the userport (what CCGMS and Novaterm drive), wired to a TCP connection to a modem bridge
+  if (def.devices.modem.enabled) a.push("-userportdevice", "2", "-rsuserdev", "0", "-rsuserbaud", "2400", "-rsdev1", `${def.devices.modem.host}:${def.devices.modem.port}`);
+  if (def.devices.wic64) a.push("-userportdevice", "23"); // WiC64: the userport WiFi device (needs an engine built with libcurl)
   a.push("-remotemonitor", "-remotemonitoraddress", `ip4://127.0.0.1:${rt.monitorPort}`);
   a.push("-binarymonitor", "-binarymonitoraddress", `ip4://127.0.0.1:${rt.binaryPort}`);
   a.push(...def.engine.extra_args);

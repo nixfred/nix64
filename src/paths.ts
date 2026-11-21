@@ -17,6 +17,7 @@ export const paths = {
   /** the folder you see and use: your shelf of disks, tapes and cartridges, and your projects */
   shelf: process.env.NIX64_SHELF ?? join(forced ?? home, "Nix64", "shelf"),
   projects: process.env.NIX64_PROJECTS ?? join(forced ?? home, "Nix64", "projects"),
+  captures: process.env.NIX64_CAPTURES ?? join(forced ?? home, "Nix64", "captures"),
 };
 
 export const machineFile = (name: string) => join(paths.config, "machines", `${name}.toml`);
@@ -27,7 +28,7 @@ export const shmPath = (name: string) => join(paths.run, `${name}.shm`);
 export const statePath = (name: string) => join(paths.run, `${name}.json`);
 
 export function ensureDirs(): void {
-  for (const d of [paths.config, join(paths.config, "machines"), paths.data, join(paths.data, "store"), join(paths.data, "machines"), paths.run, paths.shelf, paths.projects]) {
+  for (const d of [paths.config, join(paths.config, "machines"), paths.data, join(paths.data, "store"), join(paths.data, "machines"), paths.run, paths.shelf, paths.projects, paths.captures]) {
     mkdirSync(d, { recursive: true, mode: 0o755 });
   }
 }

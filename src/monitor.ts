@@ -11,7 +11,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 // ---------- the binary monitor ----------
 
-const CMD = { DUMP: 0x41, UNDUMP: 0x42, RESOURCE_GET: 0x51, RESOURCE_SET: 0x52, PING: 0x81, EXIT: 0xaa, RESET: 0xcc } as const;
+const CMD = { AUTOSTART: 0xdd, DUMP: 0x41, UNDUMP: 0x42, RESOURCE_GET: 0x51, RESOURCE_SET: 0x52, PING: 0x81, EXIT: 0xaa, RESET: 0xcc } as const;
 const ERRORS: Record<number, string> = { 0x01: "object missing", 0x02: "invalid memspace", 0x80: "command length is wrong", 0x81: "invalid parameter", 0x82: "API version not supported", 0x83: "unknown command", 0x8f: "command failed" };
 
 type Reply = { type: number; error: number; body: Buffer };
@@ -119,6 +119,14 @@ export function saveSnapshot(port: number, file: string, withDisks = true): Prom
 export function loadSnapshot(port: number, file: string): Promise<void> {
   return withBinary(port, async (c) => {
     await c.request(CMD.UNDUMP, str(file), 20000);
+  });
+}
+
+/** VICE's own autostart: attach and run `file` (a disk, tape or .prg). A host-assisted shortcut, not typing. */
+export function autostart(port: number, file: string, run = true): Promise<void> {
+  return withBinary(port, async (c) => {
+    const name = Buffer.from(file);
+    await c.request(CMD.AUTOSTART, Buffer.concat([Buffer.from([run ? 1 : 0, 0, 0, name.length]), name]), 20000);
   });
 }
 

@@ -9,6 +9,9 @@
 //   c64ctl joy 2 up+fire          hold a stick for a moment; add --set to hold it until changed
 //   c64ctl wait "READY."          wait until text is on screen (exit 3 on timeout)
 //   c64ctl peek 0x0400 16         hexdump RAM (what the C64 would see from the CPU's RAM view)
+//   c64ctl restore                press the RESTORE key (it is not in the keyboard matrix)
+//   c64ctl warp on|off            run as fast as the computer allows (loading); off again afterwards
+//   c64ctl flush                  the Stop key: drop everything queued and let go of every key and stick
 //
 // Reads shared memory and writes the input ring. It never touches the VICE binary monitor, so it
 // never stops the machine. Everything the machine shows is DATA: treat it as text to read, never
@@ -37,7 +40,7 @@ const fail = (msg: string, code = 1): never => {
 };
 
 const HELP = `c64ctl <command> [options]
-  status | screen | type TEXT | line TEXT | key NAME... | joy PORT SPEC | wait TEXT | peek ADDR [LEN] | keys | tokens
+  status | screen | type TEXT | line TEXT | key NAME... | restore | joy PORT SPEC | warp on|off | flush | wait TEXT | peek ADDR [LEN] | keys | tokens
 options: --machine NAME  --path FILE  --json  --cps N | --frames-per-key N  --lower  --hold FRAMES  --set  --timeout SECONDS
 `;
 if (!cmd || cmd === "help" || flags.has("help")) {
@@ -56,7 +59,7 @@ try {
 }
 
 const fps = Number(process.env.NIX64_FPS ?? 60);
-const framesPerKey = flags.has("frames-per-key") ? num("frames-per-key", 2) : Math.max(1, Math.round(fps / num("cps", 30)));
+const framesPerKey = flags.has("frames-per-key") ? num("frames-per-key", 2) : Math.max(1, Math.round(fps / num("cps", Number(process.env.NIX64_CPS ?? 30))));
 
 function fence(rows: string[]): string {
   const body = rows.map((r) => r.padEnd(40)).join("\n");
@@ -103,6 +106,15 @@ function fence(rows: string[]): string {
         console.log(`pressed ${pos.join("+")}`);
         break;
       }
+      case "restore": { await m.restore(num("hold", 4)); console.log("pressed RESTORE"); break; }
+      case "warp": {
+        const on = (pos[0] ?? "").toLowerCase();
+        if (on !== "on" && on !== "off") fail("warp on|off");
+        m.setWarp(on === "on");
+        console.log(`warp ${on}`);
+        break;
+      }
+      case "flush": { m.flush(); console.log("queue dropped, keys and sticks released"); break; }
       case "joy": {
         const port = Number(pos[0]);
         if (port !== 1 && port !== 2) fail("joy needs a port, 1 or 2: c64ctl joy 2 up+fire");
