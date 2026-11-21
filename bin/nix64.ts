@@ -38,7 +38,8 @@ async function ensureServer(): Promise<{ port: number; token: string }> {
   let s = serverInfo();
   if (s) return s;
   ensureDirs();
-  const p = Bun.spawn(["bun", join(root, "src/serve.ts")], { stdin: "ignore", stdout: Bun.file(join(paths.run, "server.log")), stderr: Bun.file(join(paths.run, "server.log")), env: process.env });
+  const log = Bun.file(join(paths.run, "server.log"));
+  const p = Bun.spawn(["bun", join(root, "src/serve.ts")], { stdin: "ignore", stdout: log, stderr: log, env: process.env, detached: true });
   p.unref();
   for (let i = 0; i < 100; i++) { await Bun.sleep(100); s = serverInfo(); if (s) return s; }
   return die(`the server did not start. See ${join(paths.run, "server.log")}`);
@@ -56,7 +57,7 @@ async function openWindow(): Promise<void> {
   const browser = findBrowser();
   if (!browser) { console.log(`No browser found. Open this address yourself:\n${url}`); return; }
   const args = [`--app=${url}`, `--user-data-dir=${join(paths.data, "browser")}`, "--class=Nix64", "--name=Nix64", "--window-size=1600,1000", "--no-first-run", "--no-default-browser-check", "--ozone-platform-hint=auto", "--autoplay-policy=no-user-gesture-required", "--disable-features=Translate"];
-  Bun.spawn([browser, ...args], { stdin: "ignore", stdout: "ignore", stderr: "ignore" }).unref();
+  Bun.spawn([browser, ...args], { stdin: "ignore", stdout: "ignore", stderr: "ignore", detached: true }).unref();
   console.log("READY.");
 }
 

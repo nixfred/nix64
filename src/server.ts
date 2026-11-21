@@ -309,20 +309,25 @@ export class Hub {
   start(port = Number(process.env.NIX64_PORT ?? 6464)): Server<ClientData> {
     ensureDirs();
     const self = this;
-    this.server = Bun.serve<ClientData, {}>({
+    const options = {
       hostname: "127.0.0.1",
-      port,
-      fetch: (req, server) => self.handle(req, server as Server<ClientData>),
+      fetch: (req: Request, server: Server<ClientData>) => self.handle(req, server),
       websocket: {
         maxPayloadLength: 1_000_000,
-        open(ws) {
+        open(ws: ServerWebSocket<ClientData>) {
           self.clients.add(ws);
           ws.send(JSON.stringify({ t: "hello", version: 1, settings: self.settings, machines: self.machines(), mids: Object.fromEntries(self.mids) }));
         },
-        message: (ws, raw) => self.wsMessage(ws, raw as string | Buffer),
-        close(ws) { self.clients.delete(ws); },
+        message: (ws: ServerWebSocket<ClientData>, raw: string | Buffer) => self.wsMessage(ws, raw),
+        close(ws: ServerWebSocket<ClientData>) { self.clients.delete(ws); },
       },
-    });
+    };
+    try {
+      this.server = Bun.serve<ClientData, {}>({ ...options, port } as any);
+    } catch (e) {
+      if (port === 0 || !/EADDRINUSE|in use/i.test(String((e as Error).message))) throw e;
+      this.server = Bun.serve<ClientData, {}>({ ...options, port: 0 } as any); // 6464 is taken: any free port will do
+    }
     this.syncLives();
     this.timers.push(setInterval(() => this.pump(), 8));
     this.timers.push(setInterval(() => this.status(), 200));
