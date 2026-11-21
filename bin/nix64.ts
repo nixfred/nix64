@@ -56,7 +56,7 @@ async function openWindow(): Promise<void> {
   const url = `http://127.0.0.1:${s.port}/?t=${s.token}`;
   const browser = findBrowser();
   if (!browser) { console.log(`No browser found. Open this address yourself:\n${url}`); return; }
-  const args = [`--app=${url}`, `--user-data-dir=${join(paths.data, "browser")}`, "--class=Nix64", "--name=Nix64", "--window-size=1600,1000", "--no-first-run", "--no-default-browser-check", "--ozone-platform-hint=auto", "--autoplay-policy=no-user-gesture-required", "--disable-features=Translate"];
+  const args = [`--app=${url}`, `--user-data-dir=${join(paths.data, "browser")}`, "--class=Nix64", "--name=Nix64", "--window-size=1600,1000", "--no-first-run", "--no-default-browser-check", "--ozone-platform-hint=auto", "--autoplay-policy=no-user-gesture-required", "--disable-features=Translate", "--password-store=basic", "--disable-session-crashed-bubble"];
   Bun.spawn([browser, ...args], { stdin: "ignore", stdout: "ignore", stderr: "ignore", detached: true }).unref();
   console.log("READY.");
 }

@@ -215,7 +215,7 @@ All integers are little-endian. To read a consistent snapshot: read `seq`, retry
 
 Nix64 never shows something as working that was not tested. This is the honest state.
 
-**Built and tested** (102 automated tests, 98 against the installed engine, plus the live agent test):
+**Built and tested** (106 automated tests: 102 run by default and pass on the dev build and against the installed engine on two real machines; 4 more are opt-in because they spend model usage, and passed when run):
 
 - the shell: CRT, bezel, Hub, on-screen keyboard, symbolic host keyboard, joystick keys and gamepad, paste
 - machine files, generations and rollback, pinned media, presets, headless machines
@@ -243,7 +243,10 @@ against the real thing. A device earns **verified** only on a real desk, with a 
   only listening sockets were on 127.0.0.1 (the shell on 6464, the engine's two monitor doors on ephemeral
   ports). The window's Hyprland class is `chrome-127.0.0.1__-Default`, title `Nix64`, if you want a window rule.
 - **Two real Omarchy computers (a desktop and a laptop)**, built from source and installed with pacman, with the
-  whole suite run against the installed engine (98 passed, 4 opt-in tests skipped).
+  whole suite run against the installed engine (102 passed, 0 failed, the 4 opt-in tests skipped).
+- **A real game, end to end, in a throwaway home:** the Library fetched the Planet of Zoom disk image from the
+  Internet Archive, *Load and run* put it in drive 8, typed `LOAD"*",8,1` for you, kept warp on while the real
+  loader ran, typed `RUN`, and joystick port 2 fire started the game. No game file is in this repo.
 - Not verified by a human: that you can *hear* it, and the real-hardware v1 gate below.
 
 <div align="center">
@@ -270,8 +273,8 @@ cut that runs.
 
 Nix64 is not v1 until all four of these have been watched working, on real things, by a human:
 
-1. The agent builds a program on screen, from a prompt typed inside Nix64. *(Works in tests; watching it on a desk is next.)*
-2. A game loads from your shelf and plays. Buck Rogers: Planet of Zoom is the test title.
+1. The agent builds a program on screen, from a prompt typed inside Nix64. *(Works in tests with a real agent; watching it on a desk is next.)*
+2. A game loads from your shelf and plays. Buck Rogers: Planet of Zoom is the test title. *(Works end to end in a test; watching it on a desk is next.)*
 3. A real BBS is dialled from the phone book and you land on a live board.
 4. A real disk drive loads a disk you own.
 
