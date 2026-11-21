@@ -43,7 +43,7 @@ export function joyValue(spec: string): number {
   let v = 0;
   for (const part of spec.toLowerCase().split(/[+,\s]+/).filter(Boolean)) {
     if (part === "none" || part === "center" || part === "release") continue;
-    if (!(part in JOY)) throw new Error(`unknown joystick direction ${JSON.stringify(part)} (up, down, left, right, fire)`);
+    if (!Object.hasOwn(JOY, part)) throw new Error(`unknown joystick direction ${JSON.stringify(part)} (up, down, left, right, fire)`);
     v |= JOY[part];
   }
   return v;

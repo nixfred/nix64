@@ -5,7 +5,7 @@
 // It is eager at first and learns: each card you wave away makes the next one wait longer; each one you
 // use resets it. "Quiet" in the top bar (or Settings) means it never speaks unless asked. Experts who
 // type fast and clean never see a card at all, because nothing fires when nothing goes wrong.
-import { DIALECT, ERRORS, FIRST_LESSON, dialectHint, type Hint } from "./dialect";
+import { DIALECT, ERRORS, FIRST_LESSON, dialectHint, placeLines, type Hint } from "./dialect";
 import { keysForChar } from "./hostkeys";
 import type { Live } from "./live";
 
@@ -187,12 +187,26 @@ export class Assist {
     }
     this.backoff = 1;
     this.publish();
-    if (action === "guide" && card.hint?.lines.length) { this.startGuide(card.hint.lines); return { kind: "none" }; }
-    if (action === "do" && card.hint?.lines.length) return { kind: "type", lines: card.hint.lines, hint: card.hint };
+    if ((action === "guide" || action === "do") && card.hint?.lines.length) {
+      const placed = this.place(card.hint.lines);
+      if (!placed) return { kind: "none" };
+      if (action === "guide") { this.startGuide(placed); return { kind: "none" }; }
+      return { kind: "type", lines: placed, hint: card.hint };
+    }
     return { kind: "agent", task: card.context ?? card.title, explainOnly: action === "explain" };
   }
 
   // ---------- guide me: the next key lights on the on-screen keyboard ----------
+
+  /** Hint lines with numbers must not land on top of the user's own program lines: move them clear, say so, or refuse. */
+  private place(lines: string[]): string[] | null {
+    let used: number[] = [];
+    try { used = this.live.machine.programLines(); } catch { /* no program to protect, or the machine cannot say */ }
+    const r = placeLines(lines, used);
+    if (!r) { this.live.say("host", "Your program already uses the high line numbers, so there is no free place to put these lines. Nothing was typed."); return null; }
+    if (r.moved) this.live.say("note", `Your program already uses line ${r.from.filter((n) => used.includes(n)).join(", ")}, so these lines go at ${r.to.join(", ")} instead and nothing of yours is overwritten.`);
+    return r.lines;
+  }
 
   startGuide(lines: string[]): void {
     this.guideLines = lines;

@@ -6,6 +6,9 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { findEngine } from "./engine";
 
+/** Input device names that are game controllers. A bare "Pad" must not match "TouchPad" or "Keypad". */
+export const PAD_RE = /Name="([^"]*(?:Joystick|Gamepad|Controller|(?<![A-Za-z])Pad\b)[^"]*)"/gi;
+
 export type Badge = "verified" | "untested" | "exp" | "no";
 export type DeviceRow = { id: string; name: string; what: string; found: string[]; how: string; badge: Badge; badgeText: string };
 
@@ -43,7 +46,7 @@ export function devices(): DeviceRow[] {
   const find = (pred: (d: { id: string; name: string }) => boolean) => usb.filter(pred).map((d) => `${d.name || "USB device"} (${d.id})`);
   const net = existsSync("/sys/class/net") ? readdirSync("/sys/class/net").filter((n) => n !== "lo") : [];
   const ser = existsSync("/dev") ? readdirSync("/dev").filter((n) => /^tty(USB|ACM)\d+$/.test(n)).map((n) => `/dev/${n}`) : [];
-  const pads = (read("/proc/bus/input/devices").match(/Name="([^"]*(?:Joystick|Gamepad|Controller|Pad)[^"]*)"/gi) ?? []).map((s) => s.slice(6, -1));
+  const pads = (read("/proc/bus/input/devices").match(PAD_RE) ?? []).map((s) => s.slice(6, -1));
   const row = (id: string, name: string, what: string, found: string[], how: string, supported: boolean | "maybe", noteIfNot: string): DeviceRow => {
     const v = VERIFIED[id];
     return { id, name, what, found, how: supported ? how : `${how} ${noteIfNot}`.trim(), badge: v ? "verified" : supported ? (supported === "maybe" ? "exp" : "untested") : "no", badgeText: v ?? (supported ? (supported === "maybe" ? "experimental" : "untested") : "not in this build") };

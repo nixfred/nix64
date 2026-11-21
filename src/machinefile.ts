@@ -3,7 +3,7 @@
 // change as a numbered generation you can roll back to. Same idea as NixOS, native to Nix64 (no Nix
 // needed). The file is the truth: two machines with the same file are the same machine.
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { generationsDir, machineDir, machineFile, paths, storeFile, validName } from "./paths";
 
@@ -44,7 +44,8 @@ export class MachineFileError extends Error {
 }
 
 /** The file a new machine starts from. Comments are the documentation: this is what people read. */
-export const TEMPLATE = (name: string, description = "A stock Commodore 64C, PAL, with a 1541-II.") => `# ${name}: one Nix64 machine, described completely in this file.
+export const TEMPLATE = (name: string, description = "A stock Commodore 64C, PAL, with a 1541-II.") => templateText(name, description.replace(/[\u0000-\u001f\u007f]/g, " ")); // TOML does not allow control characters in a string
+const templateText = (name: string, description: string) => `# ${name}: one Nix64 machine, described completely in this file.
 # Change it, then press Apply in the shell (or run: nix64 switch ${name}). Every change is a numbered
 # generation, and you can roll back to any earlier one.
 
@@ -261,7 +262,8 @@ export function listGenerations(name: string): Generation[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
     .filter((f) => /^\d+\.json$/.test(f))
-    .map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")) as Generation)
+    .map((f) => { try { return JSON.parse(readFileSync(join(dir, f), "utf8")) as Generation; } catch { return null; } }) // a torn file must not block the machine for ever
+    .filter((g): g is Generation => !!g)
     .sort((a, b) => a.n - b.n);
 }
 
@@ -286,7 +288,9 @@ export function switchMachine(name: string): { gen: Generation; changed: boolean
   const gen: Generation = { n, time: new Date().toISOString(), hash, source: text, def };
   mkdirSync(generationsDir(name), { recursive: true });
   rmSync(rolled, { force: true });
-  writeFileSync(join(generationsDir(name), `${n}.json`), JSON.stringify(gen, null, 1));
+  const target = join(generationsDir(name), `${n}.json`);
+  writeFileSync(`${target}.tmp`, JSON.stringify(gen, null, 1));
+  renameSync(`${target}.tmp`, target); // written whole or not at all
   writeFileSync(join(generationsDir(name), "current"), String(n));
   return { gen, changed: true };
 }

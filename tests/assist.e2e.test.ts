@@ -70,6 +70,25 @@ suite("the assistant", () => {
     expect(lastCards().some((c: any) => /make a sound/.test(c.title))).toBe(false);
   }, 60000);
 
+  test("Do it for me never types over the user's own program lines", async () => {
+    await live().machine.type("NEW\n");
+    await live().machine.type('10 PRINT "MINE"\n');
+    await live().machine.type('20 PRINT "KEEP"\n');
+    await live().machine.type("ELSE\n"); // another dialect's command: the hint is a numbered program 10, 20, 30
+    expect(await until(() => lastCards().some((c: any) => /do something otherwise/.test(c.title)), 20000)).toBe(true);
+    const id = lastCards().find((x: any) => /do something otherwise/.test(x.title)).id;
+    send({ t: "card", name: "as", id, action: "do" });
+    expect(await until(() => live().machine.screen().some((r) => r.startsWith("50 END")), 40000)).toBe(true); // moved above the user's lines
+    await Bun.sleep(800);
+    await live().machine.type("LIST\n");
+    await live().machine.waitFrames(40);
+    const rows = live().machine.screen();
+    expect(rows.some((r) => r.startsWith('10 PRINT "MINE"'))).toBe(true); // the user's lines are still there
+    expect(rows.some((r) => r.startsWith('20 PRINT "KEEP"'))).toBe(true);
+    expect(rows.some((r) => r.startsWith('30 IF A=1 THEN PRINT "YES":GOTO 50'))).toBe(true);
+    expect(feeds.some((f) => f.kind === "note" && /so these lines go at 30, 40, 50/.test(f.text))).toBe(true);
+  }, 90000);
+
   test("Guide me lights the next key, follows what you type, and finishes only when you did", async () => {
     await live().machine.type("CLS\n");
     expect(await until(() => lastCards().some((c: any) => /clear the screen/.test(c.title)), 20000)).toBe(true);

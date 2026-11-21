@@ -2,7 +2,7 @@
 // Run: bun test tests/agent.test.ts
 import { describe, expect, test } from "bun:test";
 import { describeCall, splitCommands, words } from "../src/agent";
-import { DIALECT, dialectHint } from "../src/dialect";
+import { DIALECT, dialectHint, placeLines } from "../src/dialect";
 import { keysForChar } from "../src/hostkeys";
 
 describe("reading the agent's shell calls", () => {
@@ -78,5 +78,26 @@ describe("the feed reads a shell line the way the shell does (2026-11-21 sweep)"
     expect(splitCommands("a && b ; c || d | e & f")).toEqual(["a", "b", "c", "d", "e", "f"]);
     const d = describeCall("bun /o/c64ctl.ts screen; rm -rf ~");
     expect(d.map((x) => x.kind)).toEqual(["note", "host"]);
+  });
+});
+
+describe("hint lines never overwrite the user's program (2026-11-21)", () => {
+  const ELSE = ['10 IF A=1 THEN PRINT "YES":GOTO 30', '20 PRINT "NO"', "30 END"];
+  test("no clash: the lines are typed as they are", () => {
+    const r = placeLines(ELSE, [100, 110])!;
+    expect(r.moved).toBe(false);
+    expect(r.lines).toEqual(ELSE);
+  });
+  test("a clash moves the whole block above the program, and the GOTO follows", () => {
+    const r = placeLines(ELSE, [10, 20, 25])!;
+    expect(r.moved).toBe(true);
+    expect(r.lines).toEqual(['30 IF A=1 THEN PRINT "YES":GOTO 50', '40 PRINT "NO"', "50 END"]);
+    expect(r.from).toEqual([10, 20, 30]);
+  });
+  test("lines without numbers (immediate commands) are never moved", () => {
+    expect(placeLines(["POKE 53280,2"], [10, 20])!.moved).toBe(false);
+  });
+  test("no room above a program that reaches the top, and lines that would not fit a row, are refused", () => {
+    expect(placeLines(ELSE, [10, 63990])).toBeNull();
   });
 });

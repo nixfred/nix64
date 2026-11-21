@@ -64,6 +64,7 @@ export function addToShelf(rawName: string, data: Uint8Array): string {
 }
 
 export function removeFromShelf(name: string): void {
+  if (!MEDIA_EXT.has(extname(name).toLowerCase())) throw new Error("only C64 media can be removed from the shelf here"); // not a note or a README someone keeps there
   rmSync(shelfPath(name));
 }
 

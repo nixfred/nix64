@@ -3,7 +3,7 @@
 // window, the shell draws its picture). Where systemd --user exists the engine is a transient unit
 // (`nix64-m-NAME`), so it survives the shell closing, logs to the journal, and stops cleanly.
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { createD64 } from "./d64";
@@ -127,7 +127,12 @@ export function readState(name: string): RunState | null {
 }
 
 function alive(st: RunState): boolean {
-  if (st.unit && hasSystemd()) return Bun.spawnSync(["systemctl", "--user", "is-active", "--quiet", st.unit]).exitCode === 0;
+  if (st.unit && hasSystemd()) {
+    // 0 = active, 3 = inactive or failed, 4 = no such unit. Anything else (a bus hiccup, a timeout) says nothing about the engine:
+    // treating it as "dead" made runningMachines() delete the state and shared memory of a machine that was running fine.
+    const c = Bun.spawnSync(["systemctl", "--user", "is-active", "--quiet", st.unit]).exitCode;
+    return c !== 3 && c !== 4;
+  }
   try { process.kill(st.pid, 0); return true; } catch { return false; }
 }
 
@@ -145,7 +150,17 @@ export function runningMachines(): RunState[] {
   return out;
 }
 
-export async function startMachine(name: string, opts: { windowed?: boolean } = {}): Promise<RunState> {
+const starting = new Map<string, Promise<RunState>>();
+/** Start a machine. Two calls for the same machine at once (a double click on Start) share one start instead of racing two engines onto one shared-memory file. */
+export function startMachine(name: string, opts: { windowed?: boolean } = {}): Promise<RunState> {
+  const pending = starting.get(name);
+  if (pending) return pending;
+  const p = startMachineNow(name, opts).finally(() => starting.delete(name));
+  starting.set(name, p);
+  return p;
+}
+
+async function startMachineNow(name: string, opts: { windowed?: boolean } = {}): Promise<RunState> {
   ensureDirs();
   const engine = findEngine();
   if (!engine) throw new Error("no engine found. Install nix64-vice, or set NIX64_X64SC to an x64sc built with the Nix64 patches.");
@@ -189,6 +204,7 @@ export async function startMachine(name: string, opts: { windowed?: boolean } = 
     const log = openSync(join(machineDir(name), "engine.log"), "w");
     const p = Bun.spawn([engine, ...args], { env: { ...process.env, ...env }, stdin: "ignore", stdout: log, stderr: log });
     p.unref();
+    closeSync(log); // the engine has its own copy of the descriptor; ours would leak one per start
     pid = p.pid;
   }
 

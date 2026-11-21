@@ -34,7 +34,8 @@ app should have. And it puts a **real AI agent beside it**, which has two ways o
 - **It watches quietly** and speaks up only when you look stuck. A card slides in beside the screen, never over
   it: *"I see you are trying to make a sound. BASIC V2 has no SOUND command; on a C64 you program the SID chip."*
   **Do it for me** types the C64 way on the real keyboard, no model needed. **Guide me** lights the next key on
-  the on-screen keyboard and checks each line while *you* type. Experts who type fast and clean never see a card.
+  the on-screen keyboard and checks each line while *you* type. If your program already uses the line numbers a hint wants,
+  the hint moves above it, so nothing of yours is overwritten. Experts who type fast and clean never see a card.
 - **Or you drive.** Tell it what to build. It types into the machine on the real keyboard while you watch, one
   keystroke at a time, looks at the screen after each step, and fixes its own errors. Everything it does lands
   in an activity feed, tagged **ON C64** (done through the machine's own inputs) or **HOST STEP** (anything
@@ -215,7 +216,7 @@ All integers are little-endian. To read a consistent snapshot: read `seq`, retry
 
 Nix64 never shows something as working that was not tested. This is the honest state.
 
-**Built and tested** (145 automated tests: 141 run by default and pass on the dev build and against the installed engine on two real machines; 4 more are opt-in because they spend model usage, and passed when run):
+**Built and tested** (156 automated tests: 152 run by default and pass on the dev build and against the installed engine on two real machines; 4 more are opt-in because they spend model usage, and passed when run):
 
 - the shell: CRT, bezel, Hub, on-screen keyboard, symbolic host keyboard, joystick keys and gamepad, paste
 - machine files, generations and rollback, pinned media, presets, headless machines

@@ -64,3 +64,29 @@ export const ERRORS: Record<string, string> = {
   "FILE NOT FOUND": "The disk has no file by that name. LOAD\"$\",8 then LIST shows what is on it.",
   "DEVICE NOT PRESENT": "Nothing answered at that device number: no disk in drive 8, or the drive is off.",
 };
+
+/**
+ * Keep a hint from overwriting the user's program. Hint lines that carry line numbers (10, 20, 30 ...) would replace any
+ * line of the same number already in memory, and the user would lose their work without a word. If any number is in use,
+ * the whole block moves to free numbers above the program (GOTO/GOSUB/THEN targets inside it follow), in steps of 10.
+ * Returns null when there is no room (or the moved lines would not fit on one 40 column row): then nothing should be typed.
+ */
+export function placeLines(lines: string[], used: number[]): { lines: string[]; moved: boolean; from: number[]; to: number[] } | null {
+  const num = (l: string) => /^(\d+)\s/.exec(l)?.[1];
+  const nums = lines.map(num).filter((n): n is string => !!n).map(Number);
+  const taken = new Set(used);
+  if (!nums.length || !nums.some((n) => taken.has(n))) return { lines, moved: false, from: [], to: [] };
+  const top = Math.max(...used);
+  const base = (Math.floor(top / 10) + 1) * 10;
+  if (base + 10 * (nums.length - 1) > 63990) return null;
+  const map = new Map<number, number>();
+  nums.forEach((n, i) => { if (!map.has(n)) map.set(n, base + 10 * map.size); });
+  const out = lines.map((l) => {
+    const n = num(l);
+    if (!n) return l;
+    const body = l.slice(n.length).replace(/\b(GOTO|GOSUB|THEN)(\s*)(\d+)/g, (m, kw, sp, t) => (map.has(Number(t)) ? `${kw}${sp}${map.get(Number(t))}` : m));
+    return `${map.get(Number(n))}${body}`;
+  });
+  if (out.some((l) => l.length > 40)) return null;
+  return { lines: out, moved: true, from: [...map.keys()], to: [...map.values()] };
+}

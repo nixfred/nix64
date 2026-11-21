@@ -2,14 +2,14 @@
 export const S = {
   connected: false,
   machines: [],
-  mids: {},
+  mids: Object.create(null),
   settings: null,
   current: null, // the machine in front
   view: "machine", // machine | hub
-  status: {}, // name -> latest status message
-  feed: {}, // name -> feed items
-  cards: {}, // name -> assist cards
-  guide: {}, // name -> { keys: [names], text, step }
+  status: Object.create(null), // name -> latest status message
+  feed: Object.create(null), // name -> feed items
+  cards: Object.create(null), // name -> assist cards
+  guide: Object.create(null), // name -> { keys: [names], text, step }
   agent: { running: {}, detected: [] },
   tool: "keys",
   modal: null,

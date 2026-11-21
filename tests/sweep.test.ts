@@ -11,7 +11,7 @@ const { Machine, TEL_V1_SIZE } = await import("../src/machine");
 const { archiveHost, unzipMedia } = await import("../src/shelf");
 const { createD64 } = await import("../src/d64");
 const mf = await import("../src/machinefile");
-const { paths, ensureDirs, machineFile } = await import("../src/paths");
+const { paths, ensureDirs, machineFile, generationsDir } = await import("../src/paths");
 
 describe("the memory snapshot is never torn", () => {
   test("a writer that publishes in many small writes never shows up half-written", async () => {
@@ -198,5 +198,41 @@ describe("a key pressed again right after it was let go (2026-11-21 sweep)", () 
     expect(e[2].at).toBeGreaterThanOrEqual(upAt + 2);
     live.close();
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("small robustness fixes (2026-11-21)", () => {
+  test("joystick direction 'constructor' is an error, not nothing", async () => {
+    const { joyValue } = await import("../src/keys");
+    expect(() => joyValue("constructor")).toThrow(/unknown joystick direction/);
+    expect(joyValue("up+fire")).toBe(17);
+  });
+  test("a TouchPad or a Keypad is not a game controller", async () => {
+    const { PAD_RE } = await import("../src/devices");
+    const names = ['Name="Synaptics TouchPad"', 'Name="USB Keypad"', 'Name="Logitech Gamepad F310"', 'Name="Xbox Wireless Controller"', 'Name="8BitDo Pro Pad"'];
+    const hit = names.filter((n) => (n.match(PAD_RE) ?? []).length > 0);
+    expect(hit).toEqual(['Name="Logitech Gamepad F310"', 'Name="Xbox Wireless Controller"', 'Name="8BitDo Pro Pad"']);
+  });
+  test("a control character in a description cannot make the machine file invalid TOML", () => {
+    const text = mf.TEMPLATE("ctl", "bad\u007fdesc\u0001here");
+    expect(() => Bun.TOML.parse(text)).not.toThrow();
+  });
+  test("a torn generation file is skipped, so the machine can still start and switch", () => {
+    ensureDirs();
+    mf.createMachine("torn", "x", "c64c-pal");
+    mf.switchMachine("torn");
+    const dir = generationsDir("torn");
+    const f = require("node:fs").readdirSync(dir).find((x: string) => /^\d+\.json$/.test(x));
+    writeFileSync(join(dir, "7.json"), '{"n":7,"time":"x","ha'); // a write that was cut off
+    expect(() => mf.listGenerations("torn")).not.toThrow();
+    expect(mf.listGenerations("torn").some((g) => g.n === 7)).toBe(false);
+    expect(f).toBeDefined();
+  });
+  test("only C64 media can be removed from the shelf", async () => {
+    const { removeFromShelf } = await import("../src/shelf");
+    ensureDirs();
+    writeFileSync(join(paths.shelf, "notes.txt"), "mine");
+    expect(() => removeFromShelf("notes.txt")).toThrow(/only C64 media/);
+    expect(await Bun.file(join(paths.shelf, "notes.txt")).exists()).toBe(true);
   });
 });

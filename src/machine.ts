@@ -181,6 +181,20 @@ export class Machine {
     return rows;
   }
 
+  /** The line numbers of the BASIC program in memory, read by following its chain of lines from the start-of-BASIC pointer. */
+  programLines(s: Snapshot = this.snapshot()): number[] {
+    const out: number[] = [];
+    let p = s.ram[0x2b] | (s.ram[0x2c] << 8);
+    for (let n = 0; n < 30000 && p >= 0x0401 && p < 0xa000; n++) {
+      const next = s.ram[p] | (s.ram[p + 1] << 8);
+      if (!next) break; // the end-of-program marker
+      out.push(s.ram[p + 2] | (s.ram[p + 3] << 8));
+      if (next <= p) break; // a damaged chain must not loop for ever
+      p = next;
+    }
+    return out;
+  }
+
   cursor(s: Snapshot = this.snapshot()): { row: number; col: number } {
     return { row: s.ram[0xd6], col: s.ram[0xd3] };
   }

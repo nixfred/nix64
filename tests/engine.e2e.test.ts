@@ -143,6 +143,21 @@ suite("a machine from a file", () => {
     await detach(st.monitorPort, 8).catch(() => {});
   }, 20000);
 
+  test("two Starts at once (a double click) start one engine, not two on one shared-memory file", async () => {
+    createMachine("dbl", "double start");
+    switchMachine("dbl");
+    const [a, b] = await Promise.all([startMachine("dbl"), startMachine("dbl")]);
+    try {
+      expect(b.pid).toBe(a.pid);
+      expect(runningMachines().filter((r) => r.name === "dbl").length).toBe(1);
+      const m2 = await Machine.open(a.shm);
+      expect(m2.frame()).toBeGreaterThan(0);
+      m2.close();
+    } finally {
+      await stopMachine("dbl");
+    }
+  }, 90000);
+
   test("a snapshot restores the machine as it was", async () => {
     const zebras = () => m.screen().filter((r) => r.includes("ZEBRA42")).length;
     await m.type("NEW\n");
