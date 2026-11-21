@@ -173,6 +173,8 @@ export class Assist {
     this.cards = this.cards.filter((c) => c.id !== id);
     if (action === "dismiss") {
       this.backoff = Math.min(8, this.backoff * 2);
+      // waving a card away makes the next one wait: 2 minutes, then 4, 8, up to 16
+      this.cooldownUntil = Math.max(this.cooldownUntil, Date.now() + 60_000 * this.backoff);
       this.live.say("note", `Dismissed: ${card.title}. It will wait longer before speaking up again.`);
       this.publish();
       return { kind: "none" };

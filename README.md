@@ -243,7 +243,7 @@ against the real thing. A device earns **verified** only on a real desk, with a 
   only listening sockets were on 127.0.0.1 (the shell on 6464, the engine's two monitor doors on ephemeral
   ports). The window's Hyprland class is `chrome-127.0.0.1__-Default`, title `Nix64`, if you want a window rule.
 - **Two real Omarchy computers (a desktop and a laptop)**, built from source and installed with pacman, with the
-  whole suite run against the installed engine (102 passed, 0 failed, the 4 opt-in tests skipped).
+  whole suite run against the installed engine (the default tests pass, the 4 opt-in tests skipped).
 - **A real game, end to end, in a throwaway home:** the Library fetched the Planet of Zoom disk image from the
   Internet Archive, *Load and run* put it in drive 8, typed `LOAD"*",8,1` for you, kept warp on while the real
   loader ran, typed `RUN`, and joystick port 2 fire started the game. No game file is in this repo.
