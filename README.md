@@ -247,6 +247,12 @@ against the real thing. A device earns **verified** only on a real desk, with a 
 - **A real game, end to end, in a throwaway home:** the Library fetched the Planet of Zoom disk image from the
   Internet Archive, *Load and run* put it in drive 8, typed `LOAD"*",8,1` for you, kept warp on while the real
   loader ran, typed `RUN`, and joystick port 2 fire started the game. No game file is in this repo.
+- **A second game, verified by someone else.** Ken Bandoly ([@Maverick_229](https://x.com/Maverick_229)) ran
+  *Chuck Yeager's Advanced Flight Trainer* from his own disk on Omarchy 4.5.0 and published his recipe as
+  [omarchy-chuck-yeager-nix64](https://github.com/MaverickKB/omarchy-chuck-yeager-nix64) (MIT, no game files in it).
+  His setup: a PAL C64C with a 1541-II and true drive emulation, the disk pinned from the shelf, `LOAD"*",8,1` with
+  warp on, then `RUN`; press Space at the Eagle Soft intro, use **joystick port 2**, and Intro Flight reaches the
+  cockpit. It is his report: I have not run that disk myself yet, and the game needs your own copy.
 - Not verified by a human: that you can *hear* it, and the real-hardware v1 gate below.
 
 <div align="center">

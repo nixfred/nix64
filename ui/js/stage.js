@@ -121,12 +121,15 @@ function setFocused(v) {
 const RESERVED = new Set(["F11", "F12"]);
 const STICK = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right", Space: "fire", ControlLeft: "fire" };
 let stick = new Set();
+const pasteKeys = new Set(); // keys that went down as part of a paste chord
 
 function setupKeys() {
   canvasEl.addEventListener("focus", () => setFocused(true));
   canvasEl.addEventListener("blur", () => setFocused(false));
   canvasEl.addEventListener("keydown", (e) => {
     if (RESERVED.has(e.key) || !S.current) return;
+    // Ctrl+V and Shift+Insert are the browser's paste: do not cancel them, or the paste event never comes (and the C64 would get CTRL+V)
+    if (((e.ctrlKey || e.metaKey) && e.code === "KeyV") || (e.shiftKey && e.code === "Insert")) { pasteKeys.add(e.code); return; }
     e.preventDefault();
     if (e.ctrlKey && e.code === "KeyJ" && !e.repeat) { toggleJoy(); return; }
     if (e.code === "ShiftLeft" || e.code === "ShiftRight") { send({ t: "shift", name: S.current, down: true }); return; }
@@ -138,6 +141,7 @@ function setupKeys() {
   });
   canvasEl.addEventListener("keyup", (e) => {
     if (!S.current) return;
+    if (pasteKeys.delete(e.code)) return; // the key-down was a paste: the machine never saw it
     e.preventDefault();
     if (e.code === "ShiftLeft" || e.code === "ShiftRight") { send({ t: "shift", name: S.current, down: false }); return; }
     if (joyKeys && STICK[e.code]) { stick.delete(STICK[e.code]); sendStick(); return; }

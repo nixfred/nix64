@@ -10,7 +10,7 @@ Two new input events in the ring (patch 0002):
                   without a window or a hotkey.
 And one control word: header word reserved[0] (offset 24). The client increments it to say "drop
 everything queued, let go of every key and stick": the ring head jumps to the tail, the keyboard
-matrix, the keyboard buffer, both joystick ports and RESTORE are cleared. This is the Stop key for
+matrix, the keyboard buffer (VICE's queue and the C64's own, count at $C6), both joystick ports and RESTORE are cleared. This is the Stop key for
 whoever is driving the machine (the Nix64 agent): it works at once, however much typing is still queued.
 Older readers keep working. Against: VICE 3.10 with patches 0001 to 0003. License: GPL-2.0-or-later.
 
@@ -42,7 +42,7 @@ Older readers keep working. Against: VICE 3.10 with patches 0001 to 0003. Licens
  #define NIX64_IN_SLOTS    256
  
  struct nix64_input_event {
-@@ -185,6 +188,19 @@
+@@ -185,6 +188,20 @@
  static void nix64_apply_input(struct nix64_telemetry *t)
  {
      struct nix64_input *in = &t->in;
@@ -54,7 +54,8 @@ Older readers keep working. Against: VICE 3.10 with patches 0001 to 0003. Licens
 +        flush_seen = t->reserved[0];
 +        in->head = in->tail;
 +        keyboard_clear_keymatrix();
-+        kbdbuf_flush();
++        kbdbuf_abort();            /* VICE's own queue of keys not yet handed to the C64 (kbdbuf_flush() would hand them over) */
++        mem_inject_key(0xC6, 0);   /* and the C64's own keyboard buffer: its count is at $C6 */
 +        joystick_set_value_absolute(JOYPORT_1, 0);
 +        joystick_set_value_absolute(JOYPORT_2, 0);
 +        machine_set_restore_key(0);
@@ -62,7 +63,7 @@ Older readers keep working. Against: VICE 3.10 with patches 0001 to 0003. Licens
  
      while (in->head != in->tail) {
          struct nix64_input_event e = in->ev[in->head % NIX64_IN_SLOTS];
-@@ -205,6 +221,12 @@
+@@ -205,6 +222,12 @@
              } else {
                  in->rejected++;
              }

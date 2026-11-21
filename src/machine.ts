@@ -10,6 +10,11 @@ import { join } from "node:path";
 import { joyValue, keyMatrix } from "./keys";
 import { toPetscii, type CharsetMode } from "./petscii";
 
+/** Thrown by a typing job when STOP was pressed while it was running. Not an error: the user asked for it. */
+export class Stopped extends Error {
+  constructor() { super("stopped"); this.name = "Stopped"; }
+}
+
 export const TEL_V1_SIZE = 66656;
 export const RING_SLOTS = 256;
 export const TEL_V2_SIZE = TEL_V1_SIZE + 16 + RING_SLOTS * 8;
@@ -203,13 +208,28 @@ export class Machine {
     writeSync(this.fd, t, 0, 4, RING + 4); // ... then the tail that publishes it
   }
 
-  private async room(n: number): Promise<void> {
-    while (this.ring().free < n) await sleep(5);
+  /** Counts every STOP (flush) ever sent to this engine, from any process. A running job remembers it and quits when it moves. */
+  flushToken(): number {
+    return this.u32(24);
   }
 
-  async waitFrames(n: number): Promise<void> {
+  /** Wait for `n` free slots in the ring. Quits with Stopped if STOP is pressed meanwhile, and gives up if the engine stalls. */
+  private async room(n: number, token = this.flushToken(), timeoutMs = 60000): Promise<void> {
+    const end = performance.now() + timeoutMs;
+    while (this.ring().free < n) {
+      if (this.flushToken() !== token) throw new Stopped();
+      if (performance.now() > end) throw new Error("input did not drain: is the machine running?");
+      await sleep(5);
+    }
+  }
+
+  async waitFrames(n: number, timeoutMs = 60000): Promise<void> {
     const f = this.frame();
-    while (this.frame() < f + n) await sleep(5);
+    const end = performance.now() + timeoutMs;
+    while (this.frame() < f + n) {
+      if (performance.now() > end) throw new Error("the machine is not running frames: is it paused or dead?");
+      await sleep(5);
+    }
   }
 
   /** Wait until every queued event has been applied. */
@@ -230,9 +250,11 @@ export class Machine {
   async type(text: string, opts: { framesPerKey?: number; mode?: CharsetMode } = {}): Promise<number> {
     const bytes = toPetscii(text, opts.mode ?? "upper");
     const step = Math.max(1, opts.framesPerKey ?? 2);
+    const token = this.flushToken();
     let at = this.frame() + 4;
     for (const b of bytes) {
-      await this.room(1);
+      await this.room(1, token);
+      if (this.flushToken() !== token) throw new Stopped(); // STOP was pressed: the rest of the text is not typed
       this.push(at, T_PETSCII, b);
       at += step;
     }

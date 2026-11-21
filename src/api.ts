@@ -12,6 +12,7 @@ import { machineNames } from "./machinefile";
 import { paths } from "./paths";
 import { addToShelf, archiveFetch, archiveFiles, archiveSearch, kindOf, listShelf, removeFromShelf } from "./shelf";
 import type { Live } from "./live";
+import { Stopped } from "./machine";
 
 const body = async (req: Request) => (await req.json().catch(() => ({}))) as Record<string, any>;
 const err = (status: number, error: string) => json({ ok: false, error }, status);
@@ -21,17 +22,20 @@ const M = "/api/machines/([^/]+)";
 /** Load a disk the way you would: put it in drive 8, type LOAD for you, warp while it loads, then RUN. */
 async function loadAndRun(live: Live, shelfName: string): Promise<void> {
   const m = live.machine;
+  const token = m.flushToken();
+  const stopped = () => m.flushToken() !== token;
   try {
     live.say("machine", `Disk “${shelfName}” put in drive 8.`, "drive tray");
     await insertDisk(live.name, "8", { shelf: shelfName });
     await m.waitFrames(30);
+    if (stopped()) return;
     live.say("machine", 'Typed `LOAD"*",8,1`.', "keyboard");
     await m.type('LOAD"*",8,1\n');
     live.setWarp(true);
     live.say("note", "Warp is on while it loads (the stripes are the real loader). It switches off when the machine is ready again.");
     const end = Date.now() + 240000;
     let sawLoading = false, ok = false;
-    while (Date.now() < end) {
+    while (Date.now() < end && !stopped()) {
       const rows = m.screen();
       if (rows.some((r) => r.includes("LOADING") || r.includes("SEARCHING"))) sawLoading = true;
       if (rows.some((r) => r.startsWith("?"))) { live.say("error", `The machine says: ${rows.find((r) => r.startsWith("?"))}`); break; }
@@ -40,10 +44,10 @@ async function loadAndRun(live: Live, shelfName: string): Promise<void> {
       await Bun.sleep(120);
     }
     live.setWarp(false);
-    if (ok) { live.say("machine", "Typed `RUN`.", "keyboard"); await m.type("RUN\n"); }
+    if (ok && !stopped()) { live.say("machine", "Typed `RUN`.", "keyboard"); await m.type("RUN\n"); }
   } catch (e) {
     try { live.setWarp(false); } catch { /* gone */ }
-    live.say("error", (e as Error).message);
+    if (!(e instanceof Stopped)) live.say("error", (e as Error).message);
   }
 }
 

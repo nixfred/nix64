@@ -35,5 +35,9 @@ export function ensureDirs(): void {
 
 /** Machine names are file names: keep them boring so no name can escape its folder. */
 export function validName(name: string): boolean {
-  return /^[a-z0-9][a-z0-9._-]{0,39}$/.test(name);
+  return /^[a-z0-9][a-z0-9._-]{0,39}$/.test(name) && !RESERVED.has(name);
 }
+
+/** run/NAME.json is a machine's state file, so a machine may not take the name of a file the shell keeps in run/ itself.
+ *  A machine called "server" shared run/server.json with the shell: Stop on it killed the shell's own process. */
+const RESERVED = new Set(["server"]);

@@ -11,6 +11,7 @@ import { chooseAgent, detectAgents, type AgentDef } from "./agents";
 import { Assist, type Card, type GuideState } from "./assist";
 import type { Hint } from "./dialect";
 import type { Live } from "./live";
+import { Stopped } from "./machine";
 import { machineDir } from "./paths";
 import type { Hub } from "./server";
 import { json } from "./server";
@@ -125,13 +126,15 @@ export function attachAgent(hub: Hub): void {
   /** Type lines for the user, on the real keyboard, no model needed. Visible, and in the feed. */
   async function typeLines(live: Live, lines: string[], hint: Hint): Promise<void> {
     live.say("hint", `${hint.intent[0].toUpperCase()}${hint.intent.slice(1)}: ${hint.why}`);
+    const token = live.machine.flushToken();
     try {
       for (const line of lines) {
+        if (live.machine.flushToken() !== token) return; // STOP was pressed: no further lines
         live.say("machine", `Typed \`${line}\` and pressed RETURN.`, "keyboard");
         await live.machine.type(`${line}\n`, { framesPerKey: framesPerKey(live) });
         await live.machine.waitFrames(15);
       }
-    } catch (e) { live.say("error", (e as Error).message); }
+    } catch (e) { if (!(e instanceof Stopped)) live.say("error", (e as Error).message); }
   }
 
   // ----- drive mode -----

@@ -11,7 +11,14 @@ export function init() {
   on("settings", render);
   on("msg:media", () => refresh(true));
   actions["select-shelf-filter"] = null;
-  el.addEventListener("input", (e) => { if (e.target.id === "shelf-filter") { shelfFilter = e.target.value; renderShelf(); document.getElementById("shelf-filter")?.focus(); } });
+  el.addEventListener("input", (e) => {
+    if (e.target.id !== "shelf-filter") return;
+    const pos = e.target.selectionStart ?? e.target.value.length; // the panel is rebuilt, so put the caret back where it was
+    shelfFilter = e.target.value;
+    renderShelf();
+    const f = document.getElementById("shelf-filter");
+    if (f) { f.focus(); f.setSelectionRange(pos, pos); }
+  });
   el.addEventListener("dragstart", (e) => { const r = e.target.closest("[data-shelf]"); if (r) e.dataTransfer.setData("text/nix64-shelf", r.dataset.shelf); });
   for (const type of ["dragover", "dragleave", "drop"]) el.addEventListener(type, (e) => {
     const slot = e.target.closest("[data-slot]");

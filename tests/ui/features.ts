@@ -82,6 +82,15 @@ try {
   await Bun.sleep(2500);
   const webm = readdirSync(paths.captures).filter((f) => f.endsWith(".webm"));
   check(webm.length > 0 && statSync(join(paths.captures, webm[0])).size > 2000, "Rec saves a video", webm[0] ? `${webm[0]}, ${statSync(join(paths.captures, webm[0])).size} bytes` : "");
+  // the shelf search box keeps the order you type in (it used to rebuild the panel and drop the caret to the start)
+  await page.eval(`document.getElementById('shelf-filter').focus()`);
+  for (const ch of "abc") await page.send("Input.insertText", { text: ch });
+  const filt = await page.eval<string>(`document.getElementById('shelf-filter').value`);
+  check(filt === "abc", "shelf search keeps typing order", `typed abc, box holds "${filt}"`);
+
+  // Ctrl+V and Shift+Insert are left to the browser (so the paste event fires); ordinary keys are still taken by the C64
+  const pv = await page.eval<any>(`(() => { const c = document.getElementById('screen'); const t = (init) => { const e = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }); c.dispatchEvent(e); return e.defaultPrevented; }; return { ctrlV: t({ code: 'KeyV', key: 'v', ctrlKey: true }), shiftIns: t({ code: 'Insert', key: 'Insert', shiftKey: true }), plainA: t({ code: 'KeyA', key: 'a' }) }; })()`);
+  check(pv.ctrlV === false && pv.shiftIns === false && pv.plainA === true, "Ctrl+V and Shift+Insert reach the browser's paste, plain keys go to the C64", JSON.stringify(pv));
   console.log("page errors:", page.errors.slice(0, 4));
 } finally {
   b.close();

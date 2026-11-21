@@ -15,7 +15,7 @@ process.env.NIX64_NO_SYSTEMD = "1";
 const suite = X64SC ? describe : describe.skip;
 const { createMachine, switchMachine, listGenerations, rollback } = await import("../src/machinefile");
 const { startMachine, stopMachine, runningMachines, diskPath, diskHistory } = await import("../src/engine");
-const { Machine } = await import("../src/machine");
+const { Machine, Stopped } = await import("../src/machine");
 const { attach, detach, getResource, setResource, saveSnapshot, loadSnapshot, reset } = await import("../src/monitor");
 const { createD64, readDir } = await import("../src/d64");
 const { paths, ensureDirs, machineFile } = await import("../src/paths");
@@ -103,6 +103,38 @@ suite("a machine from a file", () => {
     expect(m.screen().join("").length).toBe(at); // and the machine typed no more
     expect(marker()).toBe(0); // it never got to 20 Q in a row: stopped well short of 200
   }, 30000);
+
+  test("STOP also cancels a long job that is still feeding the ring (more than 256 keys)", async () => {
+    await m.type("NEW\n");
+    const marker = () => m.screen().filter((r) => r.includes("Q".repeat(40))).length;
+    const queued = m.type("REM " + "Q".repeat(600), { framesPerKey: 1 }); // more than the ring holds: the job is still pushing when STOP comes
+    const outcome = queued.then(() => "finished", (e) => (e instanceof Stopped ? "stopped" : `error: ${e.message}`));
+    await Bun.sleep(700);
+    m.flush();
+    expect(await outcome).toBe("stopped"); // the job quit, it did not carry on
+    await Bun.sleep(500);
+    const at = m.screen().join("").length;
+    await Bun.sleep(1500);
+    expect(m.ring().head).toBe(m.ring().tail);
+    expect(m.screen().join("").length).toBe(at); // nothing more was typed after STOP
+    expect(marker()).toBe(0); // 600 were asked for; it never reached 40 in a row
+  }, 40000);
+
+  test("STOP also empties the C64's own keyboard buffer, not only the ring", async () => {
+    await m.type("NEW\n");
+    await m.type("10 GOTO 10\n");
+    await m.type("RUN\n"); // a running program does not read the keyboard, so typed keys pile up in the buffer
+    await m.waitFrames(20);
+    await m.type("ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ", { framesPerKey: 1 });
+    m.flush();
+    await m.waitFrames(10);
+    await m.press(["RUN/STOP"], 6);
+    expect(await m.waitForText("READY.", 8000)).not.toBeNull();
+    await m.waitFrames(30);
+    const text = m.screen().join("\n");
+    expect(text).toContain("BREAK IN 10");
+    expect(text).not.toMatch(/BCDEF|FGHIJ|KLMNO/); // the queued letters were thrown away, not delivered after the break
+  }, 40000);
 
   test("a snapshot restores the machine as it was", async () => {
     const zebras = () => m.screen().filter((r) => r.includes("ZEBRA42")).length;

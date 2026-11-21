@@ -8,7 +8,7 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { createD64 } from "./d64";
 import { SLOTS, engineArgs, evaluate, switchMachine, type EngineRuntime, type MachineDef } from "./machinefile";
-import { machineDir, machineFile, paths, shmPath, statePath, storeFile, ensureDirs } from "./paths";
+import { machineDir, machineFile, paths, shmPath, statePath, storeFile, ensureDirs, validName } from "./paths";
 
 export type RunState = {
   name: string;
@@ -118,6 +118,7 @@ function prepareMedia(name: string, def: MachineDef): EngineRuntime["driveFiles"
 // ---------- start, stop, look ----------
 
 export function readState(name: string): RunState | null {
+  if (!validName(name)) return null; // a name like "server" would read the shell's own run/server.json
   try {
     return JSON.parse(readFileSync(statePath(name), "utf8")) as RunState;
   } catch {
