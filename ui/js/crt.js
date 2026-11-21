@@ -32,8 +32,26 @@ export class Tube {
     this.w = 0; this.h = 0;
     this.rgba = null;
     const gl = canvas.getContext("webgl", { antialias: false, alpha: false, preserveDrawingBuffer: true });
-    this.gl = gl;
-    if (gl) this.init(gl); else this.ctx = canvas.getContext("2d");
+    this.gl = null;
+    if (gl) {
+      // A shader that will not compile, or a lost graphics context, must not leave a black screen (or take the whole page down with it).
+      try {
+        this.init(gl); this.gl = gl;
+        canvas.addEventListener("webglcontextlost", (e) => { e.preventDefault(); this.lost = true; });
+        canvas.addEventListener("webglcontextrestored", () => { try { this.init(gl); this.lost = false; if (this.rgba) this.draw(); } catch { this.fallback(); } });
+      } catch (err) { console.error("CRT shader unavailable, drawing plain pixels:", err); this.fallback(); }
+    } else this.ctx = canvas.getContext("2d");
+  }
+  /** Plain 2D drawing, no shader. A canvas that has had a WebGL context cannot give a 2D one, so swap in a fresh canvas. */
+  fallback() {
+    const old = this.canvas, fresh = document.createElement("canvas");
+    fresh.id = old.id; fresh.className = old.className; fresh.tabIndex = old.tabIndex; fresh.setAttribute("style", old.getAttribute("style") ?? "");
+    for (const a of old.getAttributeNames()) if (!fresh.hasAttribute(a)) fresh.setAttribute(a, old.getAttribute(a));
+    fresh.width = old.width; fresh.height = old.height;
+    old.replaceWith(fresh);
+    this.canvas = fresh; this.gl = null; this.lost = false; this.ctx = fresh.getContext("2d");
+    this.onCanvasReplaced?.(fresh);
+    if (this.rgba) this.draw();
   }
   init(gl) {
     const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
@@ -70,7 +88,7 @@ export class Tube {
   }
   draw() {
     const { gl, canvas } = this;
-    if (!this.rgba) return;
+    if (!this.rgba || this.lost) return; // while the context is lost there is nothing to draw on; the restore handler draws again
     if (!gl) {
       const c = this.ctx; c.imageSmoothingEnabled = false;
       if (!this.off) this.off = document.createElement("canvas");

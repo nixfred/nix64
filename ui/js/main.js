@@ -46,7 +46,8 @@ actions["hub"] = () => {
   emit("machines");
 };
 actions["back"] = () => { if (S.view === "hub") actions["hub"](); };
-actions["mute"] = async () => { await fetch("/api/settings", { method: "PUT", headers: { "x-nix64": "1", "content-type": "application/json" }, body: JSON.stringify({ sound: { muted: !S.settings.sound.muted } }) }); };
+actions["mute"] = async () => { if (!S.settings) return; // not connected yet
+   await fetch("/api/settings", { method: "PUT", headers: { "x-nix64": "1", "content-type": "application/json" }, body: JSON.stringify({ sound: { muted: !S.settings.sound.muted } }) }); };
 for (const a of ["power-on", "power-off", "reset", "power-cycle", "warp", "joykeys", "fullscreen", "shot", "record"]) actions[a] = () => stage.action(a);
 
 document.addEventListener("click", (e) => {

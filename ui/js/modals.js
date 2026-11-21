@@ -8,10 +8,15 @@ import { loadShelf, importFiles } from "./left.js";
 const modal = () => document.getElementById("modal");
 export function open(html, cls = "") {
   const m = modal();
-  m.innerHTML = `<div class="glass dialog ${cls}" role="dialog" aria-modal="true">${html}</div>`;
+  m.innerHTML = `<div class="glass dialog ${cls}" role="dialog" aria-modal="true" tabindex="-1">${html}</div>`;
   m.hidden = false;
-  m.onclick = (e) => { if (e.target === m) close(); };
-  m.querySelector("input,textarea,select,button.primary")?.focus();
+  // close only when the press AND the release were on the backdrop: a text selection dragged out of the dialog must not close it (and lose the edits)
+  let downOnBackdrop = false;
+  m.onmousedown = (e) => { downOnBackdrop = e.target === m; };
+  m.onclick = (e) => { const was = downOnBackdrop; downOnBackdrop = false; if (e.target === m && was) close(); };
+  // keys must go to the dialog, never on to the C64 behind it: take focus off the screen even when the dialog has nothing to type in
+  (document.activeElement)?.blur?.();
+  (m.querySelector("input,textarea,select,button.primary,button") ?? m.firstElementChild)?.focus();
 }
 export function close() { modal().hidden = true; modal().innerHTML = ""; S.modal = null; }
 const head = (title, extra = "") => `<div class="dialog-h"><h2>${title}</h2>${extra}<button class="btn sm ghost icon" data-act="close" aria-label="Close">${icon("x")}</button></div>`;
@@ -24,7 +29,7 @@ const row = (label, hint, ctl) => `<div class="setrow"><div>${label}${hint ? `<s
 const tg = (id, on_) => `<input type="checkbox" class="toggle" id="${id}" ${on_ ? "checked" : ""}>`;
 const rg = (id, v, a, b) => `<input type="range" id="${id}" min="${a}" max="${b}" value="${v}">`;
 
-actions["settings"] = () => {
+actions["settings"] = () => { if (!S.settings) return; // not connected yet
   const s = S.settings, d = s.display, a = s.agent, det = S.agent.detected ?? [];
   S.modal = "settings";
   open(`${head("Settings")}<div class="dialog-b cols3">

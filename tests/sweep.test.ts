@@ -164,3 +164,34 @@ describe("c64ctl refuses numbers it cannot use", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe("a key pressed again right after it was let go (2026-11-21 sweep)", () => {
+  // The KERNAL scans the keyboard once a frame and only notices a new press if it saw the key up in between. A fast Backspace
+  // (down, up, down within a frame or two) was applied inside one frame and lost: 5 in 48 at 130 ms apart, 26 in 48 at 60 ms.
+  test("the second press is stamped at least two frames after the release", async () => {
+    const { Live } = await import("../src/live");
+    const { TEL_V2_SIZE } = await import("../src/machine");
+    const dir = mkdtempSync(join(tmpdir(), "nix64-key-"));
+    const file = join(dir, "t.shm");
+    const h = Buffer.alloc(TEL_V2_SIZE);
+    h.write("NIX64TEL", 0); h.writeUInt32LE(2, 8);
+    writeFileSync(file, h);
+    const live = new Live({ name: "k", shm: file } as any);
+    const setFrame = (n: number) => { const fd = require("node:fs").openSync(file, "r+"); require("node:fs").writeSync(fd, Buffer.from(new Uint32Array([n]).buffer), 0, 4, 20); require("node:fs").closeSync(fd); };
+    const events = () => {
+      const b = require("node:fs").readFileSync(file) as Buffer;
+      const tail = b.readUInt32LE(TEL_V1_SIZE + 4);
+      return Array.from({ length: tail }, (_, i) => { const o = TEL_V1_SIZE + 16 + i * 8; return { at: b.readUInt32LE(o), down: b[o + 7] === 1 }; });
+    };
+    setFrame(1000); live.key("DEL", true);
+    setFrame(1005); live.key("DEL", false);
+    setFrame(1006); live.key("DEL", true); // one frame after letting go
+    const e = events();
+    expect(e.length).toBe(3);
+    const upAt = e[1].at || 1005; // 0 means "now"
+    expect(e[2].down).toBe(true);
+    expect(e[2].at).toBeGreaterThanOrEqual(upAt + 2);
+    live.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

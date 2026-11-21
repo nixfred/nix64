@@ -16,6 +16,9 @@ export type FeedItem = {
   via?: string;
 };
 
+/** Frames a key must be seen up before the same key can go down again. */
+const RELEASE_FRAMES = 2;
+
 export class Live {
   readonly machine: Machine;
   readonly keyboard: HostKeyboard;
@@ -58,17 +61,26 @@ export class Live {
    * (about 20 keys a second at most) instead of being applied all in the same frame.
    */
   private downAt = new Map<number, number>();
+  /** the frame each key was last let go (stamped like the events), so the next press can be kept apart from it */
+  private upAt = new Map<number, number>();
   private tailAt = 0;
   private pushKey(row: number, col: number, down: boolean): void {
     const id = row * 8 + col, f = this.machine.frame();
     if (this.tailAt <= f) this.tailAt = 0; // nothing queued ahead of now
     let at = this.tailAt;
-    if (down) this.downAt.set(id, at || f);
-    else {
+    if (down) {
+      // The KERNAL tells a new press of a key from a held one only if it saw the key UP in between, and it scans once a frame.
+      // Pressing the same key again less than a couple of frames after letting go (a fast Backspace, a double letter) was
+      // applied inside one frame and lost: about 1 press in 10 at 130 ms apart, over half at 60 ms apart.
+      const u = this.upAt.get(id);
+      if (u !== undefined && u + RELEASE_FRAMES > Math.max(at, f)) at = u + RELEASE_FRAMES;
+      this.downAt.set(id, at || f);
+    } else {
       const d = this.downAt.get(id);
       this.downAt.delete(id);
       if (d !== undefined) at = Math.max(at, d + 3);
       if (at <= f) at = 0;
+      this.upAt.set(id, at || f);
     }
     this.tailAt = at;
     try { this.machine.push(at, 1, row, col, down ? 1 : 0); } catch { /* ring full: dropped */ }
@@ -78,6 +90,7 @@ export class Live {
   queueCleared(): void {
     this.tailAt = 0;
     this.downAt.clear();
+    this.upAt.clear();
   }
 
   /** Press or release a C64 key by name (the on-screen keyboard, the agent's hands). */

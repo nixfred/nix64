@@ -124,7 +124,9 @@ function spritesPane(body) {
   body.innerHTML = `<div class="sprites" id="sprites">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<div class="sprite off" id="sp${i}"><canvas width="24" height="21"></canvas><span>#${i}</span><span class="faint" id="spm${i}"></span></div>`).join("")}</div>
     <div class="faint sm">Read live from the VIC-II registers and the sprite pointers in RAM. Multicolour, expand and position are decoded as the chip sees them.</div>`;
   live(body, (s) => {
-    const v = s.vic, scr = (s.ram[0x288] << 8) & 0xffff; // the KERNAL's screen page: the sprite pointers sit 1016 bytes into it
+    // The sprite pointers sit 1016 bytes into the screen. Where the screen is inside its 16 KB bank comes from $D018 (what the chip uses:
+    // a program may move it without telling the KERNAL); which bank it is we can only take from the KERNAL's screen page, as the CIA port is not in RAM.
+    const v = s.vic, scr = ((s.ram[0x288] << 8) & 0xc000) | (((v[0x18] >> 4) & 15) << 10);
     for (let i = 0; i < 8; i++) {
       const on_ = (v[0x15] >> i) & 1, ptr = s.ram[(scr + 0x3f8 + i) & 0xffff], addr = ((scr & 0xc000) + ptr * 64) & 0xffff;
       const multi = (v[0x1c] >> i) & 1, col = v[0x27 + i] & 15, m0 = v[0x25] & 15, m1 = v[0x26] & 15;

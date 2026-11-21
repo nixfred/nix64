@@ -46,6 +46,12 @@ try {
   check(sp.on && sp.lit > 300 && sp.lit < 504, "sprite viewer decodes the sprite the C64 made", `lit pixels ${sp.lit}/504, label "${sp.label}"`);
   check(/100,100/.test(sp.label), "sprite position read from the VIC registers");
   await page.shot(join(out, "sprites.png"));
+  // a program that moves the screen to $0800 (VIC register $D018) keeps the sprite pointers at $0BF8, not at $07F8
+  await live.machine.type("POKE 2040,14:POKE 3064,13:POKE 53272,(PEEK(53272) AND 15) OR 32\n");
+  await Bun.sleep(1200);
+  const sp2 = await page.eval<any>(`(() => { const c = document.querySelector('#sp0 canvas'); const d = c.getContext('2d').getImageData(0, 0, 24, 21).data; let lit = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) lit++; return lit; })()`);
+  check(sp2 > 300, "sprite pointers follow $D018 when a program moves the screen", `lit pixels ${sp2}/504`);
+  await live.machine.type("POKE 53272,21\n");
 
   // charset viewer: the ROM set is in use, and it says so
   await page.eval(`document.querySelector('[data-tab=charset]').click()`);
@@ -91,6 +97,18 @@ try {
   // Ctrl+V and Shift+Insert are left to the browser (so the paste event fires); ordinary keys are still taken by the C64
   const pv = await page.eval<any>(`(() => { const c = document.getElementById('screen'); const t = (init) => { const e = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }); c.dispatchEvent(e); return e.defaultPrevented; }; return { ctrlV: t({ code: 'KeyV', key: 'v', ctrlKey: true }), shiftIns: t({ code: 'Insert', key: 'Insert', shiftKey: true }), plainA: t({ code: 'KeyA', key: 'a' }) }; })()`);
   check(pv.ctrlV === false && pv.shiftIns === false && pv.plainA === true, "Ctrl+V and Shift+Insert reach the browser's paste, plain keys go to the C64", JSON.stringify(pv));
+  // WebGL context lost and restored: the picture comes back (it used to stay black until a reload)
+  const lit = `(() => { const c = document.getElementById('screen'); const t = document.createElement('canvas'); t.width = c.width; t.height = c.height; const g = t.getContext('2d'); g.drawImage(c, 0, 0); const d = g.getImageData(0, 0, t.width, t.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 60) n++; return n; })()`;
+  const litBefore = await page.eval<number>(lit);
+  await page.eval(`(() => { const e = __tube.gl.getExtension('WEBGL_lose_context'); window.__lc = e; e.loseContext(); })()`);
+  await Bun.sleep(400);
+  await page.eval(`window.__lc.restoreContext()`);
+  await Bun.sleep(1500);
+  const litAfter = await page.eval<number>(lit);
+  check(litBefore > 1000 && litAfter > 1000, "the CRT redraws after the graphics context is lost and restored", `lit pixels before ${litBefore}, after ${litAfter}`);
+  // a shader that cannot be used: plain 2D drawing, on a canvas that is really on the page
+  const fb = await page.eval<boolean>(`(() => { const c = document.createElement('canvas'); c.width = 64; c.height = 48; document.body.appendChild(c); const t = new (window.__tube.constructor)(c); t.fallback(); const pal = new Uint8Array(48); pal[3] = 255; t.frame(new Uint8Array(16).fill(1), pal, 4, 4); const d = t.canvas.getContext('2d').getImageData(1, 1, 1, 1).data; const ok = t.canvas !== c && t.canvas.isConnected && d[0] === 255; t.canvas.remove(); return ok; })()`);
+  check(fb === true, "without a shader the tube draws plain pixels on a canvas that is on the page");
   console.log("page errors:", page.errors.slice(0, 4));
 } finally {
   b.close();

@@ -50,9 +50,12 @@ export type HostKey = { code: string; key: string; shift: boolean };
 /** Which C64 keys should be held for this host key, or null if the key means nothing to the C64. */
 export function chordFor(ev: HostKey): Chord | null {
   if (ev.code === "ShiftLeft" || ev.code === "ShiftRight") return null; // handled as the shift state itself
-  // Punctuation (and shifted digits) go by the character you typed; letters always go by the key.
+  // What you typed is what appears, on any layout: a letter is that letter (Dvorak's "o" sits on the physical S key),
+  // and punctuation and shifted digits go by their character. Only a key that makes no Latin character (a Cyrillic
+  // layout, say) or is not a character at all falls back to the physical key below.
+  if (ev.key.length === 1 && /^[a-z]$/i.test(ev.key)) return { keys: [ev.key.toUpperCase()], shift: "pass" };
   const byChar = ev.key.length === 1 ? BY_CHAR[ev.key] : undefined;
-  if (byChar && !/^Key[A-Z]$/.test(ev.code)) return byChar;
+  if (byChar) return byChar;
   const byCode = BY_CODE[ev.code];
   if (byCode) return byCode;
   let m = /^Key([A-Z])$/.exec(ev.code);

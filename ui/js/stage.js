@@ -22,6 +22,8 @@ export function init() {
   monitor = el.querySelector("#monitor");
   tube = new Tube(canvasEl);
   window.__tube = tube;
+  canvasEl = tube.canvas; // the tube may have had to swap in a fresh canvas (no WebGL shader): everything below uses the one on the page
+  tube.onCanvasReplaced = (c) => { canvasEl = c; setupKeys(); layout(); };
 
   frameHandlers.add((mid, w, h, asp, lines, frame, pal, pix) => {
     if (mid !== S.mids[S.current]) return;
@@ -61,7 +63,8 @@ function applySettings() {
   monitor.classList.toggle("nobezel", !d.bezel);
   tube.setStrength(d.crt ? d.crtStrength / 100 : 0);
   layout();
-  joyKeys = S.settings.keys.joystickKeys ? 2 : 0;
+  const jk = S.settings.keys.joystickKeys ? 2 : 0;
+  if (jk !== joyKeys) { joyKeys = jk; stick.clear(); renderStrip(); } // the button must show what the keys do
 }
 
 export function update() {
@@ -115,7 +118,10 @@ function setFocused(v) {
   monitor?.classList.toggle("focus", v);
   const c = document.getElementById("captured");
   if (c) { c.className = `captured ${v ? "on" : "off"}`; c.textContent = v ? "● TYPING ON THE C64" : "○ click to type"; }
-  if (!v && S.current) send({ t: "release", name: S.current });
+  if (!v && S.current) {
+    send({ t: "release", name: S.current });
+    if (stick.size) { stick.clear(); sendStick(); } // alt-tab with an arrow held: the key-up never comes, so let go of the stick here
+  }
 }
 
 const RESERVED = new Set(["F11", "F12"]);
@@ -154,7 +160,7 @@ function setupKeys() {
 }
 
 function sendStick() { send({ t: "joy", name: S.current, port: 2, spec: [...stick].join("+") || "none" }); }
-function toggleJoy() { joyKeys = joyKeys ? 0 : 2; stick.clear(); sendStick(); toast(joyKeys ? "Arrow keys and Space are a joystick in port 2." : "Keyboard is a keyboard again."); renderStrip(); }
+function toggleJoy() { joyKeys = joyKeys ? 0 : 2; stick.clear(); sendStick(); api("PUT", "/api/settings", { keys: { joystickKeys: !!joyKeys } }).catch(() => {}); toast(joyKeys ? "Arrow keys and Space are a joystick in port 2." : "Keyboard is a keyboard again."); renderStrip(); }
 export const focusScreen = () => canvasEl?.focus();
 
 // ---------- strip actions ----------

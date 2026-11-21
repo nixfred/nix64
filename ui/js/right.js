@@ -68,7 +68,7 @@ function renderCards() {
 }
 
 actions["assist"] = async (el) => { try { await fetch("/api/settings", { method: "PUT", headers: { "x-nix64": "1", "content-type": "application/json" }, body: JSON.stringify({ agent: { assist: el.dataset.mode } }) }); } catch (e) { toast(e.message, "error"); } };
-actions["quiet"] = () => { const m = S.settings.agent.assist === "quiet" ? "eager" : "quiet"; actions["assist"]({ dataset: { mode: m } }); toast(m === "quiet" ? "Quiet: the agent will only speak when you ask." : "The agent will speak up when you look stuck."); };
+actions["quiet"] = () => { if (!S.settings) return; const m = S.settings.agent.assist === "quiet" ? "eager" : "quiet"; actions["assist"]({ dataset: { mode: m } }); toast(m === "quiet" ? "Quiet: the agent will only speak when you ask." : "The agent will speak up when you look stuck."); };
 actions["chip"] = (el) => { const ta = document.getElementById("prompt"); ta.value = el.dataset.text; ta.focus(); };
 actions["stop"] = () => send({ t: "stop", name: S.current });
 actions["card"] = (el) => send({ t: "card", name: S.current, id: el.dataset.id, action: el.dataset.action });

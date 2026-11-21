@@ -10,6 +10,7 @@ export function init() {
   const el = document.getElementById("hub-view");
   el.innerHTML = `<div class="hub-head"><h1>HUB</h1><span class="faint sm" id="hubsub"></span><span class="spacer"></span><button class="btn sm" data-act="new-machine">${icon("plus")} New machine</button><button class="btn sm" data-act="back">Back to the machine (Esc)</button></div><div class="grid" id="grid"></div>`;
   on("machines", () => { if (S.view === "hub") render(); });
+  on("status", (st) => { const c = S.view === "hub" ? document.querySelector(`[data-fps="${CSS.escape(st.name)}"]`) : null; if (c && st.fps) c.textContent = `${Math.round(st.fps)} fps`; });
   frameHandlers.add((mid, w, h, asp, lines, frame, pal, pix) => {
     if (S.view !== "hub") return;
     const name = Object.keys(S.mids).find((n) => S.mids[n] === mid), t = tiles.get(name);
@@ -34,7 +35,7 @@ export function render() {
   tiles.clear();
   grid.innerHTML = ms.map((m, i) => `<div class="tile ${m.running ? "" : "off"}" tabindex="0" role="button" data-act="select" data-name="${esc(m.name)}" aria-label="${esc(m.name)}, ${m.running ? "running" : "off"}">
       <div class="pic">${m.running ? `<canvas width="384" height="272" data-tile="${esc(m.name)}"></canvas>` : "OFF"}</div>
-      <div class="bar"><span class="num">${i + 1}</span><b class="trunc">${esc(m.name)}</b><span class="faint sm trunc">${esc(m.model.toUpperCase())} ${esc(m.region.toUpperCase())} · ${esc(m.drives.map((d) => d.slot).join("+") || "no drive")}</span><span class="spacer"></span><span class="chip ${m.running ? "ok" : ""}">${m.running ? `${m.fps || "?"} fps` : "off"}</span></div></div>`).join("")
+      <div class="bar"><span class="num">${i + 1}</span><b class="trunc">${esc(m.name)}</b><span class="faint sm trunc">${esc(m.model.toUpperCase())} ${esc(m.region.toUpperCase())} · ${esc(m.drives.map((d) => d.slot).join("+") || "no drive")}</span><span class="spacer"></span><span class="chip ${m.running ? "ok" : ""}" data-fps="${esc(m.name)}">${m.running ? `${S.status[m.name]?.fps ?? m.fps ?? 0 ? Math.round(S.status[m.name]?.fps ?? m.fps) : "?"} fps` : "off"}</span></div></div>`).join("")
     + `<div class="tile new" tabindex="0" role="button" data-act="new-machine"><div style="font-size:2rem">${icon("plus", 1.6)}</div>New machine</div>`;
   for (const c of grid.querySelectorAll("canvas[data-tile]")) tiles.set(c.dataset.tile, { canvas: c, ctx: c.getContext("2d") });
   document.getElementById("hubsub").textContent = `${ms.filter((m) => m.running).length} running · ${ms.length} machines`;

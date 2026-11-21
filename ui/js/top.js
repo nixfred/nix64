@@ -7,6 +7,11 @@ export function init() {
   const el = document.getElementById("top");
   render();
   on("machines", render); on("conn", render); on("settings", render); on("agent", render);
+  // the machine list is only republished when something real changes, so the "booting" dot follows the live status instead
+  on("status", (st) => {
+    const d = document.querySelector(`.tab[data-name="${CSS.escape(st.name)}"] .dot`);
+    if (d && S.machines.find((m) => m.name === st.name)?.running) d.className = `dot ${st.fps > 1 ? "on" : "boot"}`;
+  });
   el.addEventListener("keydown", (e) => {
     const tabs = [...el.querySelectorAll(".tab")];
     const i = tabs.indexOf(document.activeElement);
@@ -19,7 +24,7 @@ export function init() {
 function render() {
   const el = document.getElementById("top");
   const s = S.settings;
-  const tabs = S.machines.map((m, i) => `<button class="tab" role="tab" data-act="select" data-name="${esc(m.name)}" aria-selected="${S.view === "machine" && m.name === S.current}" title="${esc(m.description)}${m.running ? "" : " (off)"}"><span class="dot ${m.running ? (m.fps > 1 ? "on" : "boot") : ""}"></span>${esc(m.name)}</button>`).join("");
+  const tabs = S.machines.map((m, i) => `<button class="tab" role="tab" data-act="select" data-name="${esc(m.name)}" aria-selected="${S.view === "machine" && m.name === S.current}" title="${esc(m.description)}${m.running ? "" : " (off)"}"><span class="dot ${m.running ? ((S.status[m.name]?.fps ?? m.fps) > 1 ? "on" : "boot") : ""}"></span>${esc(m.name)}</button>`).join("");
   const assist = s?.agent.assist ?? "eager";
   el.innerHTML = `
     <div class="logo" aria-hidden="true">${logo(20)}<small>READY.</small></div>

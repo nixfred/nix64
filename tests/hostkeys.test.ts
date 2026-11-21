@@ -107,3 +107,16 @@ describe("symbolic mapping", () => {
     expect(held.size).toBe(0);
   });
 });
+
+describe("other keyboard layouts (2026-11-21 sweep)", () => {
+  test("what you typed is what appears: Dvorak and AZERTY letters and punctuation", () => {
+    expect(chordFor({ code: "KeyS", key: "o", shift: false })?.keys).toEqual(["O"]); // Dvorak: the physical S key types "o"
+    expect(chordFor({ code: "KeyQ", key: "a", shift: false })?.keys).toEqual(["A"]); // AZERTY: the physical Q key types "a"
+    expect(chordFor({ code: "KeyW", key: ",", shift: false })).toEqual(chordFor({ code: "Comma", key: ",", shift: false })); // Dvorak "," sits on W
+    expect(chordFor({ code: "KeyA", key: "A", shift: true })?.keys).toEqual(["A"]); // shifted letters are still the letter, shift passes through
+  });
+  test("a key that makes no Latin letter falls back to the physical key", () => {
+    expect(chordFor({ code: "KeyA", key: "ф", shift: false })?.keys).toEqual(["A"]); // Cyrillic layout
+    expect(chordFor({ code: "ArrowLeft", key: "ArrowLeft", shift: false })).not.toBeNull();
+  });
+});
