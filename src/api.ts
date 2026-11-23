@@ -5,6 +5,7 @@ import { basename, extname, join } from "node:path";
 import { chooseAgent, detectAgents, detectLocal } from "./agents";
 import { devices } from "./devices";
 import { diskHistory, readState } from "./engine";
+import { writeMemory } from "./monitor";
 import type { Hub, Route } from "./server";
 import { json } from "./server";
 import { driveInfo, ejectDisk, exportDisk, flushDisk, freeze, insertDisk, restoreFromHistory, setMedia, thaw, autostartPrg, playSid, stopSid } from "./media";
@@ -76,6 +77,22 @@ export const apiRoutes: Route[] = [
   }],
   ["POST", new RegExp(`^${M}/freeze$`), async (hub, req, m) => { const slot = Number((await body(req)).slot); await freeze(m[1], slot); hub.lives.get(m[1])?.say("machine", `Whole machine frozen in slot ${slot}.`, "snapshot"); return json({ ok: true }); }],
   ["POST", new RegExp(`^${M}/thaw$`), async (hub, req, m) => { const slot = Number((await body(req)).slot); await thaw(m[1], slot); hub.lives.get(m[1])?.say("machine", `Machine restored from freeze slot ${slot}.`, "snapshot"); return json({ ok: true }); }],
+  // ----- writing memory (the sprite editor): RAM and the VIC-II's own registers, nothing else -----
+  ["POST", new RegExp(`^${M}/memory$`), async (hub, req, m) => {
+    const live = hub.lives.get(m[1]);
+    const st = readState(m[1]);
+    if (!live || !st) return err(409, "switch the machine on first");
+    const b = await body(req);
+    const addr = Number(b.addr), bytes = b.bytes;
+    if (!Number.isInteger(addr) || !Array.isArray(bytes) || !bytes.length || bytes.length > 4096 || !bytes.every((x: unknown) => Number.isInteger(x) && (x as number) >= 0 && (x as number) <= 255)) return err(400, "addr and bytes (1 to 4096 numbers, 0 to 255) are needed");
+    const end = addr + bytes.length - 1;
+    const ram = addr >= 0x0002 && end <= 0xcfff, vic = addr >= 0xd000 && end <= 0xd02e;
+    if (!ram && !vic) return err(400, "only RAM ($0002 to $CFFF) and the VIC-II registers ($D000 to $D02E) can be written this way");
+    await writeMemory(st.binaryPort, addr, Uint8Array.from(bytes));
+    if (b.say) live.say("host", String(b.say).slice(0, 160), "monitor");
+    return json({ ok: true, wrote: bytes.length, addr });
+  }],
+
   // ----- SID tunes -----
   ["GET", new RegExp(`^${M}/sid$`), (hub, _r, m) => {
     const live = hub.lives.get(m[1]);

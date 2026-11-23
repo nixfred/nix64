@@ -216,7 +216,7 @@ All integers are little-endian. To read a consistent snapshot: read `seq`, retry
 
 Nix64 never shows something as working that was not tested. This is the honest state.
 
-**Built and tested** (175 automated tests: 166 run by default and pass on the dev build and against the installed engine on two real machines; 9 more are opt-in: 4 because they spend model usage, and 5 that record real audio and need the SDL engine, which passed on gus):
+**Built and tested** (181 automated tests: 172 run by default and pass on the dev build and against the installed engine on two real machines; 9 more are opt-in: 4 because they spend model usage, and 5 that record real audio and need the SDL engine, which passed on gus):
 
 - the shell: CRT, bezel, Hub, on-screen keyboard, symbolic host keyboard, joystick keys and gamepad, paste
 - machine files, generations and rollback, pinned media, presets, headless machines
@@ -224,10 +224,14 @@ Nix64 never shows something as working that was not tested. This is the honest s
 - the shelf, drag and drop, and the Internet Archive search and fetch (only when you ask)
 - assist (local rules, Do it for me, Guide me) and drive mode with a real agent, and STOP
 - tools that read real memory: hex view, sprites, charset, cheat finder, captures (PNG and video)
+- the sprite editor: pick one of the 8 sprites, paint with the mouse (hires or multicolour), and every stroke is written into the
+  machine's own RAM at the address its sprite pointer names, so the sprite on the C64 screen changes as you paint. Multicolour
+  switches the VIC-II register, and Copy DATA gives BASIC `DATA` lines. Tested in a real browser against a real engine (a click
+  changes the byte in RAM, a right click clears it, the register flips). The write route only touches RAM and the VIC-II registers.
 - the SID jukebox: `.sid` tunes on your shelf play on the machine's own SID chip (details below)
 - settings (look, sound, agent), the manual, credits, the READY. theme, accessibility switches
 
-**Not built yet:** SID level meters and tunes that live under the ROMs, printer to PDF, the sprite and charset *editors* (the viewers read live), the
+**Not built yet:** SID level meters and tunes that live under the ROMs, printer to PDF, the charset *editor* (the viewer reads live), sprite expand and colour pickers, the
 BBS phone book, datasette controls and counter, a debugger with CPU registers and breakpoints, the Omarchy shell
 plugin (bar widget), cheat *freezing* (the finder types POKEs once), assembling on the C64 itself.
 

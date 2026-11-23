@@ -3,6 +3,7 @@
 import { S, on, send, get, post, actions, toast, machine, esc } from "./net.js";
 import { click } from "./sounds.js";
 import { icon } from "./icons.js";
+import { decode as decodeSprite, encode as encodeSprite, paint as paintSprite, convert as convertSprite, toData } from "./sprite.js";
 
 const TABS = [["keys", "Keyboard"], ["memory", "Memory"], ["sprites", "Sprites"], ["charset", "Charset"], ["cheats", "Cheat finder"], ["captures", "Captures"], ["sid", "SID"], ["printer", "Printer"]];
 
@@ -121,9 +122,30 @@ actions["poke"] = () => {
 
 const PAL = ["#000000", "#ffffff", "#9f4e44", "#6abfc6", "#a057a3", "#5cab5e", "#50459b", "#c9d487", "#a1683c", "#6d5412", "#cb7e75", "#626262", "#898989", "#9ae29b", "#887ecb", "#adadad"];
 
+// ---------- sprites: a live viewer, and an editor that writes into the machine's RAM ----------
+let spSel = 0, spBuf = null, spAddr = -1, spMulti = false, spColor = 2, spTimer = 0, spLast = null;
+const spRGB = (ci) => [parseInt(PAL[ci].slice(1, 3), 16), parseInt(PAL[ci].slice(3, 5), 16), parseInt(PAL[ci].slice(5, 7), 16)];
 function spritesPane(body) {
-  body.innerHTML = `<div class="sprites" id="sprites">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<div class="sprite off" id="sp${i}"><canvas width="24" height="21"></canvas><span>#${i}</span><span class="faint" id="spm${i}"></span></div>`).join("")}</div>
-    <div class="faint sm">Read live from the VIC-II registers and the sprite pointers in RAM. Multicolour, expand and position are decoded as the chip sees them.</div>`;
+  body.innerHTML = `<div class="row" style="gap:12px;align-items:flex-start;height:100%;min-height:0">
+    <div class="sprites" id="sprites" style="flex:0 0 auto;display:grid;grid-template-columns:repeat(4,58px);gap:4px">${[0, 1, 2, 3, 4, 5, 6, 7].map((i) => `<div class="sprite off" id="sp${i}" data-act="sp-pick" data-i="${i}" style="cursor:pointer;padding:2px;gap:1px;min-width:0"><canvas width="24" height="21" style="width:48px;height:42px;image-rendering:pixelated"></canvas><span style="font-size:10px">#${i}</span><span class="faint trunc" id="spm${i}" style="font-size:8px;max-width:54px"></span></div>`).join("")}</div>
+    <div class="col" style="gap:5px;min-width:0;flex:1">
+      <div class="row wrap" style="gap:6px"><b class="sm">Sprite #<span id="sped-n"></span></b><span class="faint sm mono" id="sped-at"></span><span class="spacer"></span>
+        <button class="btn sm" data-act="sp-multi" id="sped-multi" aria-pressed="false">Multicolour</button>
+        <button class="btn sm" data-act="sp-clear">Clear</button><button class="btn sm" data-act="sp-invert">Invert</button><button class="btn sm" data-act="sp-reload" title="Read the sprite from the machine again">Reload</button><button class="btn sm" data-act="sp-data" title="Copy BASIC DATA lines for this sprite">Copy DATA</button></div>
+      <div class="row" style="gap:10px;align-items:flex-start">
+        <canvas id="sped" width="288" height="252" style="width:192px;height:168px;image-rendering:pixelated;background:#000;border-radius:6px;cursor:crosshair;touch-action:none;flex:0 0 auto" aria-label="Sprite editor: click to paint, right click to erase"></canvas>
+        <div class="col" style="gap:4px"><div class="faint sm" id="sped-help"></div><div class="row" id="sped-colors" style="gap:4px"></div></div>
+      </div>
+    </div></div>`;
+  const ed = document.getElementById("sped");
+  const cell = (e) => { const r = ed.getBoundingClientRect(); return [Math.floor(((e.clientX - r.left) / r.width) * 24), Math.floor(((e.clientY - r.top) / r.height) * 21)]; };
+  let down = 0;
+  const stroke = (e) => { const [x, y] = cell(e); spPaint(x, y, down === 2 ? 0 : spMulti ? spColor : 1); };
+  ed.onpointerdown = (e) => { if (!spBuf) return; down = e.button === 2 ? 2 : 1; try { ed.setPointerCapture(e.pointerId); } catch { /* a synthetic event has no pointer to capture */ } stroke(e); e.preventDefault(); };
+  ed.onpointermove = (e) => { if (down) stroke(e); };
+  ed.onpointerup = ed.onpointercancel = () => { down = 0; };
+  ed.oncontextmenu = (e) => e.preventDefault();
+  spBuf = null; spAddr = -1;
   live(body, (s) => {
     // The sprite pointers sit 1016 bytes into the screen. Where the screen is inside its 16 KB bank comes from $D018 (what the chip uses:
     // a program may move it without telling the KERNAL); which bank it is we can only take from the KERNAL's screen page, as the CIA port is not in RAM.
@@ -133,20 +155,84 @@ function spritesPane(body) {
       const multi = (v[0x1c] >> i) & 1, col = v[0x27 + i] & 15, m0 = v[0x25] & 15, m1 = v[0x26] & 15;
       const c = document.querySelector(`#sp${i} canvas`); if (!c) continue;
       const g = c.getContext("2d"), img = g.createImageData(24, 21);
+      const bits = decodeSprite(s.ram.subarray(addr, addr + 63), !!multi);
       if (on_) for (let y = 0; y < 21; y++) for (let x = 0; x < 24; x++) {
-        const byte = s.ram[(addr + y * 3 + (x >> 3)) & 0xffff];
-        let ci = -1;
-        if (multi) { const bits = (byte >> (6 - (x & 6))) & 3; ci = bits === 0 ? -1 : bits === 1 ? m0 : bits === 2 ? col : m1; }
-        else if ((byte >> (7 - (x & 7))) & 1) ci = col;
-        if (ci >= 0) img.data.set([parseInt(PAL[ci].slice(1, 3), 16), parseInt(PAL[ci].slice(3, 5), 16), parseInt(PAL[ci].slice(5, 7), 16), 255], (y * 24 + x) * 4);
+        const val = bits[y][x];
+        const ci = multi ? (val === 0 ? -1 : val === 1 ? m0 : val === 2 ? col : m1) : (val ? col : -1);
+        if (ci >= 0) img.data.set([...spRGB(ci), 255], (y * 24 + x) * 4);
       }
       g.putImageData(img, 0, 0);
       const px = v[i * 2] | (((v[0x10] >> i) & 1) << 8), py = v[i * 2 + 1];
-      document.getElementById(`sp${i}`).classList.toggle("off", !on_);
+      const card = document.getElementById(`sp${i}`);
+      card.classList.toggle("off", !on_);
+      card.style.outline = i === spSel ? "1px solid var(--accent, #7aa2ff)" : "";
       document.getElementById(`spm${i}`).textContent = on_ ? `${px},${py} $${hex(addr, 4)}${multi ? " multi" : ""}${(v[0x17] >> i) & 1 ? " tall" : ""}${(v[0x1d] >> i) & 1 ? " wide" : ""}` : "off";
+      if (i === spSel) {
+        spLast = { col, m0, m1 };
+        // load the sprite into the editor when it is chosen, or when the program moved its pointer or changed its mode
+        if (spBuf === null || addr !== spAddr || !!multi !== spMulti) { spAddr = addr; spMulti = !!multi; spBuf = Uint8Array.from(s.ram.subarray(addr, addr + 63)); }
+        spDraw();
+      }
     }
   }, 400);
 }
+
+function spDraw() {
+  const ed = document.getElementById("sped"); if (!ed || !spBuf) return;
+  const g = ed.getContext("2d"), bits = decodeSprite(spBuf, spMulti), cw = 288 / 24, ch = 252 / 21;
+  const c = spLast ?? { col: 1, m0: 2, m1: 6 };
+  g.fillStyle = "#101018"; g.fillRect(0, 0, 288, 252);
+  for (let y = 0; y < 21; y++) for (let x = 0; x < 24; x++) {
+    const v = bits[y][x];
+    const ci = spMulti ? (v === 0 ? -1 : v === 1 ? c.m0 : v === 2 ? c.col : c.m1) : (v ? c.col : -1);
+    if (ci >= 0) { g.fillStyle = PAL[ci]; g.fillRect(x * cw, y * ch, cw, ch); }
+  }
+  g.strokeStyle = "rgba(255,255,255,.12)"; g.lineWidth = 1; g.beginPath();
+  for (let x = 0; x <= 24; x += spMulti ? 2 : 1) { g.moveTo(x * cw + .5, 0); g.lineTo(x * cw + .5, 252); }
+  for (let y = 0; y <= 21; y++) { g.moveTo(0, y * ch + .5); g.lineTo(288, y * ch + .5); }
+  g.stroke();
+  document.getElementById("sped-n").textContent = String(spSel);
+  document.getElementById("sped-at").textContent = `$${hex(spAddr, 4)}`;
+  document.getElementById("sped-multi")?.setAttribute("aria-pressed", spMulti ? "true" : "false");
+  document.getElementById("sped-help").textContent = spMulti ? "Multicolour: pixels are double wide. Left click paints the chosen colour, right click erases." : "Left click or drag paints, right click erases.";
+  const box = document.getElementById("sped-colors");
+  if (box) box.innerHTML = spMulti ? [[1, c.m0, "shared 1"], [2, c.col, "own"], [3, c.m1, "shared 2"]].map(([slot, ci, label]) => `<button class="btn sm" data-act="sp-color" data-slot="${slot}" aria-pressed="${spColor === slot}" title="${label}" style="gap:5px"><span style="width:12px;height:12px;border-radius:2px;background:${PAL[ci]};display:inline-block"></span>${label}</button>`).join("") : "";
+}
+/** a change to the sprite: draw it at once, then write the sprite's 63 bytes into the machine's RAM */
+function spCommit() {
+  spDraw();
+  clearTimeout(spTimer);
+  spTimer = setTimeout(async () => {
+    try { await post(`/api/machines/${S.current}/memory`, { addr: spAddr, bytes: [...spBuf], say: `Sprite editor: wrote sprite ${spSel} to $${hex(spAddr, 4)}.` }); }
+    catch (e) { toast(e.message, "error"); }
+  }, 60);
+}
+function spPaint(x, y, value) {
+  if (!spBuf || x < 0 || x > 23 || y < 0 || y > 20) return;
+  const next = encodeSprite(paintSprite(decodeSprite(spBuf, spMulti), x, y, value, spMulti), spMulti);
+  if (next.every((b, i) => b === spBuf[i])) return;
+  spBuf = next; spCommit();
+}
+actions["sp-pick"] = (el) => { spSel = Number(el.dataset.i); spBuf = null; spAddr = -1; };
+actions["sp-clear"] = () => { if (!spBuf) return; spBuf = new Uint8Array(63); spCommit(); };
+actions["sp-invert"] = () => { if (!spBuf) return; spBuf = spBuf.map((b) => b ^ 0xff); spCommit(); };
+actions["sp-reload"] = () => { spBuf = null; spAddr = -1; };
+actions["sp-color"] = (el) => { spColor = Number(el.dataset.slot); spDraw(); };
+actions["sp-multi"] = async () => {
+  if (!spBuf) return;
+  const next = !spMulti;
+  try {
+    const snap = await snapshot();
+    const reg = (snap.vic[0x1c] & ~(1 << spSel)) | (next ? 1 << spSel : 0);
+    await post(`/api/machines/${S.current}/memory`, { addr: 0xd01c, bytes: [reg], say: `Sprite editor: sprite ${spSel} is ${next ? "multicolour" : "hires"} now.` });
+    spBuf = encodeSprite(convertSprite(decodeSprite(spBuf, spMulti), next), next); spMulti = next; spCommit();
+  } catch (e) { toast(e.message, "error"); }
+};
+actions["sp-data"] = async () => {
+  if (!spBuf) return;
+  try { await navigator.clipboard.writeText(toData(spBuf, 1000)); toast("BASIC DATA lines for the sprite copied. Paste them into the C64 (Ctrl+V on the screen).", "ok"); }
+  catch { toast("The browser would not let me use the clipboard here.", "error"); }
+};
 
 function charsetPane(body) {
   body.innerHTML = `<div class="row"><span class="faint sm" id="csinfo"></span></div><canvas id="cs" width="256" height="64" style="width:100%;max-height:150px;image-rendering:pixelated;background:#000;border-radius:6px;object-fit:contain"></canvas>`;

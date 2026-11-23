@@ -99,6 +99,32 @@ try {
   // Ctrl+V and Shift+Insert are left to the browser (so the paste event fires); ordinary keys are still taken by the C64
   const pv = await page.eval<any>(`(() => { const c = document.getElementById('screen'); const t = (init) => { const e = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }); c.dispatchEvent(e); return e.defaultPrevented; }; return { ctrlV: t({ code: 'KeyV', key: 'v', ctrlKey: true }), shiftIns: t({ code: 'Insert', key: 'Insert', shiftKey: true }), plainA: t({ code: 'KeyA', key: 'a' }) }; })()`);
   check(pv.ctrlV === false && pv.shiftIns === false && pv.plainA === true, "Ctrl+V and Shift+Insert reach the browser's paste, plain keys go to the C64", JSON.stringify(pv));
+  // the sprite editor writes real bytes into the machine's RAM
+  const poke = await page.eval<any>(`fetch('/api/machines/f/memory', { method: 'POST', headers: { 'x-nix64': '1', 'content-type': 'application/json' }, body: JSON.stringify({ addr: 2040, bytes: [13] }) }).then((r) => r.json())`);
+  check(poke.ok === true && poke.wrote === 1, "the memory route writes RAM", JSON.stringify(poke));
+  const bad = await page.eval<number>(`fetch('/api/machines/f/memory', { method: 'POST', headers: { 'x-nix64': '1', 'content-type': 'application/json' }, body: JSON.stringify({ addr: 0xe000, bytes: [1] }) }).then((r) => r.status)`);
+  const badSid = await page.eval<number>(`fetch('/api/machines/f/memory', { method: 'POST', headers: { 'x-nix64': '1', 'content-type': 'application/json' }, body: JSON.stringify({ addr: 0xd400, bytes: [1] }) }).then((r) => r.status)`);
+  check(bad === 400 && badSid === 400, "and refuses ROM and the SID, which it is not for", `ROM ${bad}, SID ${badSid}`);
+  await page.eval(`document.querySelector('[data-tab=sprites]').click()`);
+  await Bun.sleep(1200);
+  const edAt = parseInt((await page.eval<string>(`document.getElementById('sped-at').textContent`)).replace("$", ""), 16);
+  const rowByte = (row: number) => live.machine.snapshot().ram[edAt + row * 3];
+  check(edAt === 832 && rowByte(7) === 129, "the sprite editor loads sprite 0 from the machine", `at $${edAt.toString(16)}, row 7 = ${rowByte(7)}`);
+  const clickCell = (x: number, y: number, button = 0) => page.eval(`(() => { const c = document.getElementById('sped'), r = c.getBoundingClientRect(); const o = { bubbles: true, cancelable: true, button: ${button}, clientX: r.left + (${x} + .5) / 24 * r.width, clientY: r.top + (${y} + .5) / 21 * r.height }; c.dispatchEvent(new PointerEvent('pointerdown', o)); c.dispatchEvent(new PointerEvent('pointerup', o)); })()`);
+  await clickCell(3, 7);
+  await Bun.sleep(500);
+  check(rowByte(7) === (129 | 0x10), "a click in the editor paints a pixel into RAM", `row 7 byte 0 = ${rowByte(7)} (was 129, expected ${129 | 0x10})`);
+  await clickCell(0, 0, 2);
+  await Bun.sleep(500);
+  check(rowByte(0) === 0x7f, "a right click erases one into RAM", `row 0 byte 0 = ${rowByte(0)} (was 255, expected 127)`);
+  await page.eval(`document.querySelector('[data-act=sp-multi]').click()`);
+  await Bun.sleep(900);
+  check((live.machine.snapshot().vic[0x1c] & 1) === 1, "the Multicolour button sets the VIC-II register for that sprite");
+  await page.eval(`document.querySelector('[data-act=sp-multi]').click()`);
+  await Bun.sleep(900);
+  check((live.machine.snapshot().vic[0x1c] & 1) === 0, "and turns it off again");
+  await page.shot(join(out, "sprite-editor.png"));
+
   // WebGL context lost and restored: the picture comes back (it used to stay black until a reload)
   const lit = `(() => { const c = document.getElementById('screen'); const t = document.createElement('canvas'); t.width = c.width; t.height = c.height; const g = t.getContext('2d'); g.drawImage(c, 0, 0); const d = g.getImageData(0, 0, t.width, t.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 60) n++; return n; })()`;
   const litBefore = await page.eval<number>(lit);
