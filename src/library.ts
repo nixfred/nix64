@@ -21,8 +21,8 @@ const MAX_ITEMS = 2_000_000;
 
 /** `path` is the path inside the library as text. When a file name is not valid UTF-8 (old zips store DOS code page 437: "720°", "Amöba"),
  *  `path` shows it decoded as CP437 and `pb` keeps the exact bytes (base64) so the file can still be opened. */
-export type LibItem = { id: string; set: string; path: string; pb?: string; zip?: string; name: string; kind: Kind; size: number };
-export type Catalog = { version: 1; root: string; indexedAt: string; ms: number; count: number; sets: Record<string, number>; kinds: Record<string, number>; skipped: { zips: number; unreadable: number }; items: LibItem[] };
+export type LibItem = { id: string; set: string; path: string; pb?: string; zip?: string; /** "7z" when `zip` names a file inside a .7z (the default is a .zip) */ ar?: "7z"; name: string; kind: Kind; size: number };
+export type Catalog = { version: 1; root: string; indexedAt: string; ms: number; count: number; sets: Record<string, number>; kinds: Record<string, number>; skipped: { zips: number; unreadable: number; sevenZ: number }; items: LibItem[] };
 
 /** "~" and "~/x" mean your home folder. Anything that is not absolute after that is refused (empty string). */
 export function expandPath(p: string): string {
@@ -76,12 +76,49 @@ export function zipNames(file: string | Buffer): { name: string; size: number }[
   } finally { closeSync(fd); }
 }
 
+/** The 7-Zip program, if this machine has one (7z, 7zz or 7za). Without it, .7z archives are left out of the catalog and counted. */
+export const sevenZip = (): string | null => Bun.which("7z") ?? Bun.which("7zz") ?? Bun.which("7za");
+
+/** A process argument must be text: an archive whose own file name is not valid UTF-8 cannot be handed to 7-Zip, so it is refused plainly. */
+const archiveArg = (file: Buffer): string => { const t = file.toString("utf8"); if (t.includes("\ufffd")) throw new Error("this archive's file name is not valid UTF-8, so 7-Zip cannot be given it"); return t; };
+
+/** The media files inside a .7z, listed by 7-Zip (`l -slt`): the archive is never unpacked. */
+export async function sevenNames(file: Buffer): Promise<{ name: string; size: number }[]> {
+  const bin = sevenZip();
+  if (!bin) return [];
+  const p = Bun.spawn(["nice", "-n", "10", bin, "l", "-ba", "-slt", "-sccUTF-8", "-bd", "--", archiveArg(file)], { stdin: "ignore", stdout: "pipe", stderr: "ignore" });
+  const text = await new Response(p.stdout).text();
+  if ((await p.exited) !== 0) throw new Error("7z could not list that archive");
+  const out: { name: string; size: number }[] = [];
+  for (const rec of text.split("\n\n")) {
+    const f: Record<string, string> = {};
+    for (const line of rec.split("\n")) { const i = line.indexOf(" = "); if (i > 0) f[line.slice(0, i)] = line.slice(i + 3); }
+    const name = f.Path, size = Number(f.Size);
+    if (!name || f.Folder === "+" || !LIB_EXT.has(extname(name).toLowerCase()) || !(size > 0) || size > MAX_FILE) continue;
+    out.push({ name, size });
+  }
+  return out;
+}
+
+/** One file out of a .7z, to memory (`e -so`: no path is ever written to disk). Solid archives decode up to the file, so a big archive takes a while. */
+async function sevenExtract(file: Buffer, inner: string): Promise<Uint8Array> {
+  const bin = sevenZip() ?? (() => { throw new Error("that title is inside a .7z archive and this machine has no 7z (install 7-Zip: pacman -S 7zip)"); })();
+  const p = Bun.spawn(["nice", "-n", "10", bin, "e", "-so", "-spd", "-bd", "-sccUTF-8", "--", archiveArg(file), inner], { stdin: "ignore", stdout: "pipe", stderr: "ignore" });
+  const timer = setTimeout(() => p.kill(), 300_000);
+  try {
+    const data = new Uint8Array(await new Response(p.stdout).arrayBuffer());
+    if ((await p.exited) !== 0 || !data.length) throw new Error(`7z could not read ${inner} out of the archive`);
+    if (data.length > MAX_FILE) throw new Error("that file is larger than 64 MB");
+    return data;
+  } finally { clearTimeout(timer); }
+}
+
 /** Walk the library and write the catalog. Never follows a symlink, never opens a file but zips, and gives the event loop back as it goes so a running shell stays alive. */
 export async function indexLibrary(root = libraryRoot(), progress?: (n: number) => void): Promise<Catalog> {
   const t0 = Date.now();
   if (!existsSync(root) || !statSync(root).isDirectory()) throw new Error(`the library folder ${root} does not exist. Make it and put your files in it, or set another path (Settings, or NIX64_LIBRARY).`);
   const items: LibItem[] = [];
-  const skipped = { zips: 0, unreadable: 0 };
+  const skipped = { zips: 0, unreadable: 0, sevenZ: 0 };
   const rootB = Buffer.from(root);
   const stack: Buffer[] = [rootB];
   let seen = 0;
@@ -105,6 +142,10 @@ export async function indexLibrary(root = libraryRoot(), progress?: (n: number) 
       if (ext === ".zip") {
         if (parts.length === 2) { skipped.zips++; continue; } // LIBRARY/SET/original-download.zip
         try { for (const z of zipNames(full)) items.push({ id: idOf(relB, z.name), set, path: rel.text, pb, zip: z.name, name: basename(z.name).replace(/\.[^.]+$/, ""), kind: kindOf(z.name), size: z.size }); } catch { skipped.unreadable++; }
+      } else if (ext === ".7z") {
+        if (parts.length === 2) { skipped.zips++; continue; }
+        if (!sevenZip()) { skipped.sevenZ++; continue; }
+        try { for (const z of await sevenNames(full)) items.push({ id: idOf(relB, z.name), set, path: rel.text, pb, zip: z.name, ar: "7z", name: basename(z.name).replace(/\.[^.]+$/, ""), kind: kindOf(z.name), size: z.size }); } catch { skipped.unreadable++; }
       } else if (LIB_EXT.has(ext) && st.size > 0 && st.size <= MAX_FILE) {
         items.push({ id: idOf(relB), set, path: rel.text, pb, name: leaf.replace(/\.[^.]+$/, ""), kind: kindOf(leaf), size: st.size });
       }
@@ -154,13 +195,15 @@ export function searchLibrary(cat: { items: LibItem[]; hay: string[] }, q: strin
 }
 
 /** Put one catalogued title on the shelf and return its shelf name. The path comes from the catalog this process wrote, never from a client, and must still resolve inside the library. */
-export function stageOnShelf(item: LibItem, root = libraryRoot()): string {
+export async function stageOnShelf(item: LibItem, root = libraryRoot()): Promise<string> {
   const rootB = Buffer.from(root), relB = item.pb ? Buffer.from(item.pb, "base64") : Buffer.from(item.path);
   let real: Buffer, rootReal: Buffer;
   try { real = realpathSync(Buffer.concat([rootB, SLASH, relB]), { encoding: "buffer" }) as Buffer; rootReal = realpathSync(rootB, { encoding: "buffer" }) as Buffer; } catch { throw new Error(`${item.path} is gone from the library. Index again (nix64 library index).`); }
   if (!real.equals(rootReal) && !real.subarray(0, rootReal.length + 1).equals(Buffer.concat([rootReal, SLASH]))) throw new Error("that file is outside the library folder");
   let data: Uint8Array;
-  if (item.zip) {
+  if (item.zip && item.ar === "7z") {
+    data = await sevenExtract(real, item.zip);
+  } else if (item.zip) {
     const got = unzipMedia(readFileSync(real), item.zip);
     if (!got.length) throw new Error(`${item.zip} could not be read out of ${item.path}`);
     data = got[0].data;

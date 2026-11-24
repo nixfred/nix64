@@ -216,7 +216,7 @@ All integers are little-endian. To read a consistent snapshot: read `seq`, retry
 
 Nix64 never shows something as working that was not tested. This is the honest state.
 
-**Built and tested** (189 automated tests: 180 run by default and pass on the dev build and against the installed engine on two real machines; 9 more are opt-in: 4 because they spend model usage, and 5 that record real audio and need the SDL engine, which passed on gus):
+**Built and tested** (190 automated tests: 181 run by default and pass on the dev build and against the installed engine on two real machines; 9 more are opt-in: 4 because they spend model usage, and 5 that record real audio and need the SDL engine, which passed on gus):
 
 - the shell: CRT, bezel, Hub, on-screen keyboard, symbolic host keyboard, joystick keys and gamepad, paste
 - machine files, generations and rollback, pinned media, presets, headless machines
@@ -290,18 +290,18 @@ the **ROM library** tab under the screen. Nix64 ships none of it and downloads n
 ```sh
 mkdir -p ~/c64-library/mine        # the default folder; any layout works, the first folder level is shown as the "set"
 cp ~/Downloads/*.d64 ~/c64-library/mine/
-nix64 library index                # reads names only; loose .d64 .d71 .d81 .g64 .x64 .t64 .tap .crt .prg .p00 .sid, and the same inside .zip files
+nix64 library index                # reads names only; loose .d64 .d71 .d81 .g64 .x64 .t64 .tap .crt .prg .p00 .sid, and the same inside .zip and .7z files
 nix64 library find chuck yeager    # id, kind, set, name
 nix64 library run NAME ID          # start that title on the running machine NAME (or press Start in the ROM library tab)
 ```
 
 - **Where the folder is.** `~/c64-library` unless you say otherwise: `"library": {"path": "/mnt/big/c64"}` in `~/.config/nix64/settings.json`,
   or the environment variable `NIX64_LIBRARY` (which wins). `nix64 library path` prints what is in use.
-- **What it does.** `index` walks the folder once (it never follows a symlink and opens nothing but zips, whose central directory it reads)
+- **What it does.** `index` walks the folder once (it never follows a symlink and opens nothing but archives: zips by their central directory, `.7z` files by asking 7-Zip to list them, which needs `7z` installed (Arch: `pacman -S 7zip`); without it `.7z` files are skipped and counted)
   and writes one JSON catalog to `~/.local/share/nix64/library.json`. Search matches every word you type against the title and its folder.
   **Start** copies that one file to your shelf (a title you start twice is one shelf file) and loads it the way the shelf does: a disk
   types `LOAD"*",8,1` for you and warps while it loads, a `.prg`, tape or cartridge goes through VICE's autostart, a `.sid` goes to the SID player.
-  The catalog is only a list of names: a client cannot make the server open a path, only an id the server itself wrote.
+  A title inside a `.7z` is read out on Start (`7z e -so`, to memory, nothing else is unpacked), so the first Start from a big solid archive takes longer. The catalog is only a list of names: a client cannot make the server open a path, only an id the server itself wrote. A catalog of ~480,000 titles is a 158 MB file and about 700 MB of server memory once loaded.
 - **Not copied, not committed.** The library folder lives outside this repository (`.gitignore` also blocks `c64-library/` and `library.json`
   if one is ever made inside a checkout), and the big original download zips that sit directly in a set folder (`~/c64-library/SET/*.zip`) are left out of
   the catalog because their unpacked files sit beside them.
@@ -310,8 +310,7 @@ nix64 library run NAME ID          # start that title on the running machine NAM
   host, mirror or check any of it. Unpack each into its own folder under the library (`~/c64-library/ghostware`, `~/c64-library/tosec`).
 - **Tested** on a real engine: the unit tests build a library of their own files (loose, in zips, with a DOS code page name like `720°`),
   and `tests/ui/features.ts` indexes one from the tab, searches, presses Start and watches the title's own `PRINT` appear on the real screen.
-  The real Ghostware C64 ROM Collection (8,239 titles) indexed in under a second with nothing unreadable, and *Chuck Yeager's Advanced Flight Trainer*
-  was started from it with `nix64 library run` and reached its title screen. Tape and cartridge starts use VICE's autostart and have
+  The real Ghostware C64 ROM Collection (8,239 titles) and the unpacked TOSEC archives (470,694 more, almost all inside `.7z` files) indexed together in 7 seconds with nothing unreadable. *Chuck Yeager's Advanced Flight Trainer* was started with `nix64 library run`, once from a Ghostware disk image and once from a TOSEC title read out of a `.7z` (4.4 s), and both reached the game's title screen. Tape and cartridge starts use VICE's autostart and have
   not been tried against a real tape or cartridge yet.
 
 ## Roadmap

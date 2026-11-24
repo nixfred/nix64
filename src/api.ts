@@ -171,7 +171,8 @@ export const apiRoutes: Route[] = [
     const id = String((await body(req)).id ?? "");
     const item = loadCatalog()?.items.find((i) => i.id === id);
     if (!item) return err(404, "that title is not in the catalog (index the library again?)");
-    const shelf = stageOnShelf(item);
+    const shelf = await stageOnShelf(item).catch((e) => e as Error);
+    if (shelf instanceof Error) return err(500, shelf.message);
     if (item.kind === "sid") return json({ ok: true, shelf, how: "sid", title: item.name }); // the caller plays it through POST /sid, which asks before it resets a program
     const r = await startShelfItem(live, m[1], shelf);
     if (!r.ok) return err(400, r.error);

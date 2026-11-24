@@ -11,7 +11,7 @@ const home = mkdtempSync(join(tmpdir(), "nix64-lib-"));
 const lib = join(home, "my library"); // a space in the path on purpose
 process.env.NIX64_HOME = home;
 process.env.NIX64_LIBRARY = lib;
-const { expandPath, indexLibrary, libraryRoot, loadCatalog, searchLibrary, stageOnShelf, zipNames } = await import("../src/library");
+const { expandPath, indexLibrary, libraryRoot, loadCatalog, searchLibrary, sevenZip, stageOnShelf, zipNames } = await import("../src/library");
 const { saveSettings, loadSettings } = await import("../src/settings");
 const { createD64 } = await import("../src/d64");
 const { listShelf } = await import("../src/shelf");
@@ -98,26 +98,26 @@ describe("searching", () => {
 });
 
 describe("starting a title", () => {
-  test.skipIf(!python)("a loose file and a zipped file both land on the shelf byte for byte, and a repeat adds nothing", () => {
+  test.skipIf(!python)("a loose file and a zipped file both land on the shelf byte for byte, and a repeat adds nothing", async () => {
     const cat = loadCatalog()!;
     const loose = cat.items.find((i) => i.name.startsWith("Chuck"))!, zipped = cat.items.find((i) => i.name === "Wizball side 2")!;
-    const a = stageOnShelf(loose, lib), b = stageOnShelf(zipped, lib);
+    const a = await stageOnShelf(loose, lib), b = await stageOnShelf(zipped, lib);
     expect(listShelf().find((i) => i.name === a)!.kind).toBe("disk");
     expect(readFileSync(join(paths.shelf, a)).equals(disk("CHUCK"))).toBe(true);
     expect(readFileSync(join(paths.shelf, b)).equals(disk("SIDE2"))).toBe(true);
     const before = listShelf().length;
-    expect(stageOnShelf(loose, lib)).toBe(a);
+    expect(await stageOnShelf(loose, lib)).toBe(a);
     expect(listShelf().length).toBe(before);
   });
 
-  test.skipIf(!python)("a catalog entry that points outside the library, or at a file that is gone, is refused", () => {
+  test.skipIf(!python)("a catalog entry that points outside the library, or at a file that is gone, is refused", async () => {
     const cat = loadCatalog()!;
     const evil = { ...cat.items[0], path: "../outside.d64" };
     writeFileSync(join(home, "outside.d64"), disk("OUT"));
-    expect(() => stageOnShelf(evil, lib)).toThrow(/outside the library/);
+    await expect(stageOnShelf(evil, lib)).rejects.toThrow(/outside the library/);
     rmSync(join(lib, "ghostware/Roms/Zork I (1984)(Infocom).prg"));
     const zork = cat.items.find((i) => i.name.startsWith("Zork"))!;
-    expect(() => stageOnShelf(zork, lib)).toThrow(/gone from the library|outside the library/);
+    await expect(stageOnShelf(zork, lib)).rejects.toThrow(/gone from the library|outside the library/);
     expect(existsSync(join(home, "outside.d64"))).toBe(true); // and nothing was touched
   });
 });
@@ -136,8 +136,28 @@ describe("names that are not UTF-8", () => {
     expect(odd.pb).toBeDefined(); // the exact bytes are kept
     expect(cat.items.find((i) => i.name === "Plain (USA)")!.pb).toBeUndefined(); // an ordinary name carries nothing extra
     expect(searchLibrary(loadCatalog()!, "720°").total).toBe(1);
-    const shelf = stageOnShelf(odd, lib2);
+    const shelf = await stageOnShelf(odd, lib2);
     expect(readFileSync(join(paths.shelf, shelf)).equals(disk("SEVENTWENTY"))).toBe(true);
+    await indexLibrary(lib); // leave the catalog as the others expect
+  });
+});
+
+describe("titles inside .7z archives (TOSEC ships them this way)", () => {
+  test.skipIf(!sevenZip())("they are listed without unpacking and one title is read out on Start, byte for byte", async () => {
+    const lib3 = join(home, "lib3"), src = join(home, "src7");
+    mkdirSync(join(lib3, "tosec/Games [D64]"), { recursive: true });
+    mkdirSync(join(src, "Zap [a]"), { recursive: true });
+    writeFileSync(join(src, "Zap [a]/Zap [a] (1990)(Nobody).d64"), disk("ZAP"));
+    writeFileSync(join(src, "Zap [a]/notes.txt"), "not media");
+    writeFileSync(join(src, "Boom (1991)(Nobody).prg"), prg);
+    const r = Bun.spawnSync([sevenZip()!, "a", "-bd", join(lib3, "tosec/Games [D64]/Games - [D64].7z"), "."], { cwd: src });
+    expect(r.exitCode).toBe(0);
+    const cat = await indexLibrary(lib3);
+    expect(cat.items.map((i) => i.name).sort()).toEqual(["Boom (1991)(Nobody)", "Zap [a] (1990)(Nobody)"]); // [brackets] are in real TOSEC names
+    expect(cat.items.every((i) => i.ar === "7z")).toBe(true);
+    const zap = cat.items.find((i) => i.name.startsWith("Zap"))!;
+    const shelf = await stageOnShelf(zap, lib3);
+    expect(readFileSync(join(paths.shelf, shelf)).equals(disk("ZAP"))).toBe(true);
     await indexLibrary(lib); // leave the catalog as the others expect
   });
 });
