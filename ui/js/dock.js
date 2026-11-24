@@ -3,9 +3,10 @@
 import { S, on, send, get, post, actions, toast, machine, esc } from "./net.js";
 import { click } from "./sounds.js";
 import { icon } from "./icons.js";
+import { loadShelf } from "./left.js";
 import { decode as decodeSprite, encode as encodeSprite, paint as paintSprite, convert as convertSprite, toData } from "./sprite.js";
 
-const TABS = [["keys", "Keyboard"], ["memory", "Memory"], ["sprites", "Sprites"], ["charset", "Charset"], ["cheats", "Cheat finder"], ["captures", "Captures"], ["sid", "SID"], ["printer", "Printer"]];
+const TABS = [["keys", "Keyboard"], ["memory", "Memory"], ["sprites", "Sprites"], ["charset", "Charset"], ["cheats", "Cheat finder"], ["captures", "Captures"], ["sid", "SID"], ["library", "ROM library"], ["printer", "Printer"]];
 
 // [C64 key name, legend, shifted legend, width in units]
 const ROWS = [
@@ -38,7 +39,7 @@ function render() {
   clearInterval(snapTimer);
   document.getElementById("dtabs").innerHTML = TABS.map(([id, label]) => `<button class="dock-tab" role="tab" data-act="dock-tab" data-tab="${id}" aria-selected="${tab === id}">${label}</button>`).join("");
   const body = document.getElementById("dbody");
-  ({ keys: keysPane, memory: memoryPane, sprites: spritesPane, charset: charsetPane, cheats: cheatsPane, captures: capturesPane, sid: sidPane, printer: printerPane })[tab](body);
+  ({ keys: keysPane, memory: memoryPane, sprites: spritesPane, charset: charsetPane, cheats: cheatsPane, captures: capturesPane, sid: sidPane, library: libraryPane, printer: printerPane })[tab](body);
 }
 actions["dock-tab"] = (el) => { tab = el.dataset.tab; S.tool = tab; render(); };
 
@@ -336,4 +337,88 @@ actions["sid-song"] = (el) => {
 };
 on("sid", () => { if (tab === "sid") render(); });
 on("machines", () => { if (tab === "sid") render(); });
+// ---------- ROM library ----------
+// Your own folder of disks, tapes and cartridges (default ~/c64-library), browsed from a catalog the shell
+// builds from it (Index). Start copies that one title to your shelf and starts it on the running machine.
+// Nix64 ships and downloads none of it.
+const lib = { info: null, q: "", kind: "", res: null, busy: "", err: "", ask: null, asked: false };
+let libTimer = 0, libSeq = 0;
+const KIND_ICON = { disk: "disk", tape: "tape", cart: "cart", prg: "file", sid: "music" };
+function libraryPane(body) {
+  if (!lib.asked) { lib.asked = true; libInfo(); }
+  const hadFocus = document.activeElement?.id === "lib-q", info = lib.info, run = !!machine()?.running;
+  const kinds = info?.kinds ? Object.keys(info.kinds) : [];
+  body.innerHTML = `<div class="col" style="padding:8px 10px;gap:6px;height:100%;min-height:0">
+    <div class="row wrap" style="gap:8px"><b>ROM library</b>
+      <span class="faint sm trunc mono" style="min-width:0;flex:1" title="${esc(info?.root ?? "")}">${info ? esc(info.root) : "…"}</span>
+      ${info?.indexed ? `<span class="faint sm">${info.count.toLocaleString()} title${info.count === 1 ? "" : "s"}</span>` : ""}
+      <button class="btn sm" data-act="lib-index" ${lib.busy || !info?.exists ? "disabled" : ""}>${icon("reset")} ${lib.busy === "index" ? "Indexing…" : info?.indexed ? "Index again" : "Index"}</button></div>
+    ${!info ? "" : !info.exists ? `<div class="dim sm">No folder at ${esc(info.root)}. Make it and put your own disks, tapes and cartridges in it (folders and .zip files are fine), then press Index. To use another folder: Settings, or NIX64_LIBRARY.</div>`
+      : !info.indexed ? `<div class="dim sm">The folder is there but not catalogued yet. Press Index (it reads names only, a big collection takes a minute or two).</div>`
+      : `<div class="row" style="gap:6px"><input class="field" id="lib-q" style="flex:1;min-width:0" placeholder="Search ${info.count.toLocaleString()} titles: words in the name or the folder" value="${esc(lib.q)}" aria-label="Search the library" autocomplete="off" spellcheck="false">
+        <select class="field" id="lib-kind" style="width:150px;flex:none" aria-label="Kind"><option value="">all kinds</option>${kinds.map((k) => `<option value="${k}" ${lib.kind === k ? "selected" : ""}>${k} (${info.kinds[k].toLocaleString()})</option>`).join("")}</select></div>`}
+    ${lib.err ? `<div class="problems" role="alert">${esc(lib.err)}</div>` : ""}
+    ${lib.ask ? `<div class="problems" role="alert"><div>${esc(lib.ask.msg)}</div><div class="row" style="margin-top:6px"><button class="btn sm primary" data-act="lib-sid-force">Play anyway</button><button class="btn sm" data-act="lib-sid-cancel">Cancel</button></div></div>` : ""}
+    <div class="grow scroll col" style="gap:3px;min-height:0" id="lib-list">${libRows(run)}</div>
+    <div class="faint" style="font-size:10px;line-height:1.35">Nix64 ships and downloads no ROMs or disks: this is only a catalog of the folder you fill yourself. Start copies one title to your shelf, then loads it like any shelf item (disks type LOAD for you).${run ? "" : " Power the machine on to start a title."}</div>
+  </div>`;
+  const q = body.querySelector("#lib-q");
+  if (q) {
+    q.oninput = () => { lib.q = q.value; clearTimeout(libTimer); libTimer = setTimeout(libSearch, 140); };
+    q.onkeydown = (e) => e.stopPropagation();
+    if (hadFocus) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+  }
+  const k = body.querySelector("#lib-kind");
+  if (k) k.onchange = () => { lib.kind = k.value; libSearch(); };
+  if (info?.indexed && !lib.res && !lib.err) libSearch();
+}
+function libRows(run) {
+  const info = lib.info;
+  if (!info?.indexed) return "";
+  if (!lib.res) return `<div class="dim sm" style="padding:6px">…</div>`;
+  if (!lib.res.items.length) return `<div class="dim sm" style="padding:6px">Nothing matches.</div>`;
+  const more = lib.res.total > lib.res.items.length ? `<div class="faint sm" style="padding:4px 6px">${lib.res.items.length} of ${lib.res.total.toLocaleString()} shown: add a word to narrow it.</div>` : "";
+  return lib.res.items.map((t) => `<div class="slot" style="grid-template-columns:22px 1fr auto;padding:4px 6px"><div style="text-align:center">${icon(KIND_ICON[t.kind] ?? "file")}</div>
+    <div class="col" style="gap:0;min-width:0"><div class="name trunc sm" title="${esc(t.name)}">${esc(t.name)}</div><div class="faint trunc" style="font-size:10px">${esc(t.kind)} · ${esc(t.set)}${t.zip ? " · in a zip" : ""} · ${(t.size / 1024).toFixed(t.size < 10240 ? 1 : 0)} KB</div></div>
+    <button class="btn sm primary" data-act="lib-run" data-id="${esc(t.id)}" ${run && !lib.busy ? "" : "disabled"}>${lib.busy === t.id ? "…" : `${icon("play")} Start`}</button></div>`).join("") + more;
+}
+async function libInfo() {
+  try { lib.info = await get("/api/library"); lib.err = ""; } catch (e) { lib.err = e.message; }
+  if (tab === "library") render();
+}
+async function libSearch() {
+  const seq = ++libSeq;
+  try {
+    const r = await get(`/api/library/search?q=${encodeURIComponent(lib.q)}&kind=${encodeURIComponent(lib.kind)}&limit=60`);
+    if (seq !== libSeq) return; // a newer keystroke is already searching
+    lib.res = r; lib.err = "";
+  } catch (e) { if (seq !== libSeq) return; lib.err = e.message; }
+  const list = document.getElementById("lib-list");
+  if (tab === "library" && list) list.innerHTML = libRows(!!machine()?.running); else if (tab === "library") render();
+}
+actions["lib-index"] = async () => {
+  lib.busy = "index"; render();
+  try { const r = await post("/api/library/index"); toast(`Catalogued ${r.count.toLocaleString()} title${r.count === 1 ? "" : "s"}.`, "ok"); lib.res = null; await libInfo(); }
+  catch (e) { lib.err = e.message; }
+  lib.busy = ""; if (tab === "library") render();
+};
+actions["lib-run"] = async (el) => {
+  const id = el.dataset.id;
+  lib.busy = id; lib.err = ""; render();
+  try {
+    const r = await post(`/api/machines/${S.current}/library/run`, { id });
+    await loadShelf();
+    if (r.how === "sid") { lib.busy = ""; await libPlaySid(r.shelf, false); return; }
+    toast(`Started “${r.title}”.`, "ok");
+  } catch (e) { lib.err = e.message; }
+  lib.busy = ""; if (tab === "library") render();
+};
+async function libPlaySid(shelf, force) {
+  try { await post(`/api/machines/${S.current}/sid`, { shelf, force }); lib.ask = null; toast("Playing the tune. The SID tab has the controls.", "ok"); }
+  catch (e) { if (e.status === 409 && e.body?.needsConfirm) lib.ask = { shelf, msg: e.body.error }; else { lib.ask = null; lib.err = e.message; } }
+  if (tab === "library") render();
+}
+actions["lib-sid-force"] = () => { if (lib.ask) libPlaySid(lib.ask.shelf, true); };
+actions["lib-sid-cancel"] = () => { lib.ask = null; if (tab === "library") render(); };
+on("library", () => { lib.asked = false; lib.res = null; if (tab === "library") render(); });
 const printerPane = notBuilt("Printer to PDF", "The engine can print to a file, but the shell does not yet collect it into a PDF.", "Planned: virtual MPS-803 to PDF; a real MPS when one is attached on the real-hardware path.");

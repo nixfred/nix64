@@ -15,6 +15,11 @@
 /roms/
 /disks/
 /shelf/
+# The library is YOUR folder of disks and ROMs (default ~/c64-library, outside the repo). If one is ever
+# made inside a checkout, none of it can be committed.
+/c64-library/
+**/c64-library/
+library.json
 # VICE source tree and tarballs fetched for the proof steps in the README
 /vice-*/
 /vice-*.tar.gz

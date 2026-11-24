@@ -51,6 +51,7 @@ export function connect() {
       case "feed-all": S.feed[m.name] = m.items; emit("feed", m.name); break;
       case "cards": S.cards[m.name] = m.cards; emit("cards", m.name); break;
       case "sid": S.sid[m.name] = m.sid; emit("sid", m.name); break;
+      case "library": emit("library", m.count); break;
       case "guide": S.guide[m.name] = m.guide; emit("guide", m.name); break;
       case "agent": Object.assign(S.agent, m.agent); emit("agent", m.name); break;
       case "toast": toast(m.text, m.kind); break;

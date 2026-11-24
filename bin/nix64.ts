@@ -12,6 +12,10 @@
 //   nix64 serve             run the shell's server in the foreground
 //   nix64 theme install     put the READY. Omarchy theme in ~/.config/omarchy/themes (then: omarchy theme set ready)
 //   nix64 skill install     link the c64 skill into your agents' skill folders (claude, codex, pi, agents), only where they exist
+//   nix64 library [path]    where your library folder is (default ~/c64-library; NIX64_LIBRARY or Settings changes it) and what is catalogued
+//   nix64 library index    walk the folder and write the catalog (loose .d64 .t64 .prg .crt .tap and the same inside .zip files)
+//   nix64 library find WORDS... [--kind disk|tape|cart|prg|sid] [--set NAME] [--limit N]
+//   nix64 library run NAME ID|WORDS...   start a catalogued title on the running machine NAME
 //   nix64 doctor            check the engine, the browser, the agent
 import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -129,6 +133,44 @@ switch (cmd) {
       n++;
     }
     if (!n) console.log("nothing to do: no agent skill folder was found, or the c64 skill is already linked.");
+    break;
+  }
+  case "library": {
+    const L = await import("../src/library");
+    const sub = pos[0] ?? "path", root = L.libraryRoot();
+    if (sub === "path") {
+      const cat = L.loadCatalog();
+      console.log(`library folder: ${root}${existsSync(root) ? "" : "  (does not exist yet)"}`);
+      console.log(cat ? `catalog: ${cat.count} titles, indexed ${cat.indexedAt}${cat.root !== root ? `  (of ${cat.root}: the folder changed, index again)` : ""}
+  sets: ${Object.entries(cat.sets).map(([k, v]) => `${k} ${v}`).join(", ") || "none"}
+  kinds: ${Object.entries(cat.kinds).map(([k, v]) => `${k} ${v}`).join(", ") || "none"}` : "catalog: none yet. Run:  nix64 library index");
+    } else if (sub === "index") {
+      const tty = process.stderr.isTTY;
+      const cat = await L.indexLibrary(root, (n) => { if (tty) process.stderr.write(`\r${n} titles...`); }).catch((e) => die(e.message));
+      if (tty) process.stderr.write("\r");
+      console.log(`${cat.count} titles from ${root} in ${(cat.ms / 1000).toFixed(1)} s`);
+      console.log(`  sets: ${Object.entries(cat.sets).map(([k, v]) => `${k} ${v}`).join(", ") || "none"}`);
+      console.log(`  kinds: ${Object.entries(cat.kinds).map(([k, v]) => `${k} ${v}`).join(", ") || "none"}`);
+      console.log(`  left out: ${cat.skipped.zips} original download zip(s), ${cat.skipped.unreadable} unreadable`);
+    } else if (sub === "find" || sub === "run") {
+      const cat = L.loadCatalog() ?? die("the library is not indexed yet:  nix64 library index");
+      const words = (sub === "run" ? pos.slice(2) : pos.slice(1)).join(" ");
+      const hit = sub === "run" ? cat.items.find((i) => i.id === pos[2] && pos.length === 3) : undefined;
+      const res = hit ? { items: [hit], total: 1 } : L.searchLibrary(cat, words, { kind: flag("kind"), set: flag("set"), limit: Number(flag("limit")) || (sub === "run" ? 8 : 20) });
+      if (sub === "find") {
+        for (const i of res.items) console.log(`${i.id}  ${i.kind.padEnd(5)} ${i.set.padEnd(10)} ${i.name}${i.zip ? `   [in ${i.path}]` : ""}`);
+        console.log(`${res.items.length} of ${res.total} shown`);
+      } else {
+        const name = pos[1] ?? die("nix64 library run MACHINE ID|WORDS...");
+        if (res.total !== 1) { for (const i of res.items) console.log(`${i.id}  ${i.kind.padEnd(5)} ${i.name}`); die(res.total ? `${res.total} titles match: give the id of one` : "no title matches"); }
+        const sv = serverInfo() ?? die("the shell is not running. Start it with `nix64` (it opens the window) or `nix64 serve`.");
+        const item = res.items[0];
+        const call = async (path: string, body: object) => { const r = await fetch(`http://127.0.0.1:${sv.port}${path}`, { method: "POST", headers: { cookie: `nix64=${sv.token}`, "x-nix64": "1", "content-type": "application/json" }, body: JSON.stringify(body) }); const j = await r.json().catch(() => ({})) as any; if (!r.ok) die(j.error ?? `HTTP ${r.status}`); return j; };
+        const r = await call(`/api/machines/${name}/library/run`, { id: item.id });
+        if (r.how === "sid") { await call(`/api/machines/${name}/sid`, { shelf: r.shelf }); console.log(`playing ${item.name} on ${name}`); }
+        else console.log(`started ${item.name} on ${name} (${r.how}); shelf file ${r.shelf}`);
+      }
+    } else die("nix64 library [path|index|find WORDS|run NAME ID]");
     break;
   }
   case "doctor": {

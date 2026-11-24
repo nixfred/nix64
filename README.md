@@ -216,7 +216,7 @@ All integers are little-endian. To read a consistent snapshot: read `seq`, retry
 
 Nix64 never shows something as working that was not tested. This is the honest state.
 
-**Built and tested** (181 automated tests: 172 run by default and pass on the dev build and against the installed engine on two real machines; 9 more are opt-in: 4 because they spend model usage, and 5 that record real audio and need the SDL engine, which passed on gus):
+**Built and tested** (189 automated tests: 180 run by default and pass on the dev build and against the installed engine on two real machines; 9 more are opt-in: 4 because they spend model usage, and 5 that record real audio and need the SDL engine, which passed on gus):
 
 - the shell: CRT, bezel, Hub, on-screen keyboard, symbolic host keyboard, joystick keys and gamepad, paste
 - machine files, generations and rollback, pinned media, presets, headless machines
@@ -229,6 +229,7 @@ Nix64 never shows something as working that was not tested. This is the honest s
   switches the VIC-II register, and Copy DATA gives BASIC `DATA` lines. Tested in a real browser against a real engine (a click
   changes the byte in RAM, a right click clears it, the register flips). The write route only touches RAM and the VIC-II registers.
 - the SID jukebox: `.sid` tunes on your shelf play on the machine's own SID chip (details below)
+- the ROM library: a catalog of a folder of your own disks, tapes and cartridges (`nix64 library index`), browsed and started from a tab (details below)
 - settings (look, sound, agent), the manual, credits, the READY. theme, accessibility switches
 
 **Not built yet:** SID level meters and tunes that live under the ROMs, printer to PDF, the charset *editor* (the viewer reads live), sprite expand and colour pickers, the
@@ -280,6 +281,38 @@ against the real thing. A device earns **verified** only on a real desk, with a 
 <div align="center">
 <img src="assets/screenshots/omarchy-desktop.png" alt="Nix64 running on a real Omarchy desktop" width="80%">
 </div>
+
+## Your own library of disks, tapes and cartridges
+
+The shelf is for the few things you pick up one at a time. If you keep a big collection, point Nix64 at the folder and browse it from
+the **ROM library** tab under the screen. Nix64 ships none of it and downloads none of it: it only catalogs a folder you fill yourself.
+
+```sh
+mkdir -p ~/c64-library/mine        # the default folder; any layout works, the first folder level is shown as the "set"
+cp ~/Downloads/*.d64 ~/c64-library/mine/
+nix64 library index                # reads names only; loose .d64 .d71 .d81 .g64 .x64 .t64 .tap .crt .prg .p00 .sid, and the same inside .zip files
+nix64 library find chuck yeager    # id, kind, set, name
+nix64 library run NAME ID          # start that title on the running machine NAME (or press Start in the ROM library tab)
+```
+
+- **Where the folder is.** `~/c64-library` unless you say otherwise: `"library": {"path": "/mnt/big/c64"}` in `~/.config/nix64/settings.json`,
+  or the environment variable `NIX64_LIBRARY` (which wins). `nix64 library path` prints what is in use.
+- **What it does.** `index` walks the folder once (it never follows a symlink and opens nothing but zips, whose central directory it reads)
+  and writes one JSON catalog to `~/.local/share/nix64/library.json`. Search matches every word you type against the title and its folder.
+  **Start** copies that one file to your shelf (a title you start twice is one shelf file) and loads it the way the shelf does: a disk
+  types `LOAD"*",8,1` for you and warps while it loads, a `.prg`, tape or cartridge goes through VICE's autostart, a `.sid` goes to the SID player.
+  The catalog is only a list of names: a client cannot make the server open a path, only an id the server itself wrote.
+- **Not copied, not committed.** The library folder lives outside this repository (`.gitignore` also blocks `c64-library/` and `library.json`
+  if one is ever made inside a checkout), and the big original download zips that sit directly in a set folder (`~/c64-library/SET/*.zip`) are left out of
+  the catalog because their unpacked files sit beside them.
+- **Where files come from is up to you, and so is whether you may have them.** One place people get collections is the download page at
+  <https://tech.mfr.st/downloads> (kept by @MaddenFilmRoom0): a C64 ROM collection by Ghostware, and the TOSEC archives. Nix64 does not
+  host, mirror or check any of it. Unpack each into its own folder under the library (`~/c64-library/ghostware`, `~/c64-library/tosec`).
+- **Tested** on a real engine: the unit tests build a library of their own files (loose, in zips, with a DOS code page name like `720°`),
+  and `tests/ui/features.ts` indexes one from the tab, searches, presses Start and watches the title's own `PRINT` appear on the real screen.
+  The real Ghostware C64 ROM Collection (8,239 titles) indexed in under a second with nothing unreadable, and *Chuck Yeager's Advanced Flight Trainer*
+  was started from it with `nix64 library run` and reached its title screen. Tape and cartridge starts use VICE's autostart and have
+  not been tried against a real tape or cartridge yet.
 
 ## Roadmap
 

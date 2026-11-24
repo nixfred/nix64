@@ -17,7 +17,7 @@ const { createHub } = await import("../../src/server");
 const { createMachine } = await import("../../src/machinefile");
 const { startMachine, stopMachine } = await import("../../src/engine");
 const { ensureDirs, paths } = await import("../../src/paths");
-const { addToShelf } = await import("../../src/shelf");
+const { addToShelf, listShelf } = await import("../../src/shelf");
 
 ensureDirs();
 const hub = await createHub();
@@ -165,6 +165,27 @@ try {
   await Bun.sleep(2500);
   const ram3 = live.machine.snapshot().ram;
   check(ram3[0x314] === 0x31 && ram3[0x315] === 0xea, "Stop puts the KERNAL interrupt back");
+  // the library: a folder of your own files, catalogued from the Library tab, and a title started from it really runs on the machine
+  const libDir = join(home, "libtest");
+  mkdirSync(join(libDir, "tosec/Games"), { recursive: true });
+  const basic = (text: string) => { const t = Buffer.from(`\x99"${text}"`, "latin1"); const body = Buffer.concat([Buffer.from([0x0b, 0x08, 0x0a, 0x00]), t, Buffer.from([0x00, 0x00, 0x00])]); body.writeUInt16LE(0x0801 + 4 + t.length + 1, 0); return Buffer.concat([Buffer.from([0x01, 0x08]), body]); };
+  writeFileSync(join(libDir, "tosec/Games/Library Probe (2026)(Nix64).prg"), basic("LIBRARY TITLE RAN"));
+  process.env.NIX64_LIBRARY = libDir;
+  await page.eval(`window.__S.sid.f = null; document.querySelector('[data-tab=library]').click()`);
+  await Bun.sleep(800);
+  const libTab = await page.eval<string>(`document.querySelector('.dock-body').innerText`);
+  check(/not catalogued yet|Press Index/.test(libTab) && !!(await page.eval<boolean>(`!!document.querySelector('[data-act=lib-index]')`)), "the ROM library tab starts by offering to index, and says where the folder is", libTab.replace(/\n/g, " | ").slice(0, 80));
+  await page.eval(`document.querySelector('[data-act=lib-index]').click()`);
+  await page.waitFor(`!!document.getElementById('lib-q')`, 15000);
+  await page.eval(`(() => { const q = document.getElementById('lib-q'); q.value = 'probe'; q.dispatchEvent(new Event('input')); })()`);
+  await page.waitFor(`document.getElementById('lib-list').innerText.includes('Library Probe')`, 8000);
+  const list = await page.eval<string>(`document.getElementById('lib-list').innerText`);
+  check(/Library Probe \(2026\)\(Nix64\)/.test(list) && /prg · tosec/.test(list), "searching finds the title with its kind and set", list.replace(/\n/g, " | ").slice(0, 80));
+  await page.shot(join(out, "library.png"));
+  await page.eval(`document.querySelector('[data-act=lib-run]').click()`);
+  const ran = await live.machine.waitForText("LIBRARY TITLE RAN", 20000).then(() => true, () => false);
+  check(ran, "Start copies the title to the shelf and the machine really runs it", "its own PRINT came up on the real screen");
+  check(listShelf().some((i) => i.name === "Library Probe (2026)(Nix64).prg"), "and the title is now on the shelf");
   console.log("page errors:", page.errors.slice(0, 4));
 } finally {
   b.close();

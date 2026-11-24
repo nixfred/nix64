@@ -14,6 +14,7 @@ import { paths } from "./paths";
 import { addToShelf, archiveFetch, archiveFiles, archiveSearch, kindOf, listShelf, removeFromShelf } from "./shelf";
 import type { Live } from "./live";
 import { Stopped } from "./machine";
+import { indexLibrary, libraryRoot, loadCatalog, searchLibrary, stageOnShelf, type Catalog } from "./library";
 
 const body = async (req: Request) => (await req.json().catch(() => ({}))) as Record<string, any>;
 const err = (status: number, error: string) => json({ ok: false, error }, status);
@@ -50,6 +51,21 @@ async function loadAndRun(live: Live, shelfName: string): Promise<void> {
     try { live.setWarp(false); } catch { /* gone */ }
     if (!(e instanceof Stopped)) live.say("error", (e as Error).message);
   }
+}
+
+let indexing: Promise<Catalog> | null = null;
+
+/** Start one shelf item on a running machine, the way each kind is started. Used by Run and by the library. */
+async function startShelfItem(live: Live, machineName: string, shelfName: string): Promise<{ ok: true; how: string } | { ok: false; error: string }> {
+  const kind = kindOf(shelfName);
+  if (kind === "disk") { void loadAndRun(live, shelfName); return { ok: true, how: "typed LOAD" }; }
+  if (kind === "sid") return { ok: false, error: "use the SID player for tunes (POST /sid)" };
+  if (kind === "prg" || kind === "tape" || kind === "cart") {
+    await autostartPrg(machineName, shelfName); // VICE's own autostart: the file is attached and started the way the engine does it
+    if (kind === "prg") live.say("host", `VICE autostart loaded and started “${shelfName}” (there is no disk to LOAD it from).`, "monitor");
+    return { ok: true, how: "autostart" };
+  }
+  return { ok: false, error: `${shelfName} is not something to run` };
 }
 
 export const apiRoutes: Route[] = [
@@ -127,16 +143,40 @@ export const apiRoutes: Route[] = [
   ["POST", new RegExp(`^${M}/run$`), async (hub, req, m) => {
     const live = hub.lives.get(m[1]);
     if (!live) return err(409, "switch the machine on first");
-    const name = String((await body(req)).shelf);
-    const kind = kindOf(name);
-    if (kind === "disk") { void loadAndRun(live, name); return json({ ok: true, how: "typed LOAD" }); }
-    if (kind === "sid") return err(400, "use the SID player for tunes (POST /sid)");
-    if (kind === "prg") {
-      await autostartPrg(m[1], name);
-      live.say("host", `VICE autostart loaded and started “${name}” (there is no disk to LOAD it from).`, "monitor");
-      return json({ ok: true, how: "autostart" });
-    }
-    return err(400, `${name} is not something to run (put tapes and cartridges in their own slots)`);
+    const r = await startShelfItem(live, m[1], String((await body(req)).shelf));
+    return r.ok ? json({ ok: true, how: r.how }) : err(400, r.error);
+  }],
+
+  // ----- the library: browse a catalog of your own folder, start a title from it -----
+  ["GET", /^\/api\/library$/, () => {
+    const root = libraryRoot(), cat = loadCatalog();
+    return json({ ok: true, root, exists: existsSync(root), indexed: !!cat, count: cat?.count ?? 0, indexedAt: cat?.indexedAt, sets: cat?.sets ?? {}, kinds: cat?.kinds ?? {}, catalogRoot: cat?.root, indexing: indexing !== null });
+  }],
+  ["GET", /^\/api\/library\/search$/, (_h, _r, _m, url) => {
+    const cat = loadCatalog();
+    if (!cat) return err(409, "the library has not been indexed yet");
+    const q = url.searchParams;
+    return json({ ok: true, ...searchLibrary(cat, q.get("q") ?? "", { kind: q.get("kind") || undefined, set: q.get("set") || undefined, limit: Number(q.get("limit")) || 50 }) });
+  }],
+  ["POST", /^\/api\/library\/index$/, async (hub) => {
+    // one walk at a time: a second press joins the first
+    indexing ??= indexLibrary().finally(() => { indexing = null; });
+    const cat = await indexing;
+    hub.broadcast({ t: "library", count: cat.count });
+    return json({ ok: true, count: cat.count, sets: cat.sets, kinds: cat.kinds, ms: cat.ms, skipped: cat.skipped });
+  }],
+  ["POST", new RegExp(`^${M}/library/run$`), async (hub, req, m) => {
+    const live = hub.lives.get(m[1]);
+    if (!live) return err(409, "switch the machine on first");
+    const id = String((await body(req)).id ?? "");
+    const item = loadCatalog()?.items.find((i) => i.id === id);
+    if (!item) return err(404, "that title is not in the catalog (index the library again?)");
+    const shelf = stageOnShelf(item);
+    if (item.kind === "sid") return json({ ok: true, shelf, how: "sid", title: item.name }); // the caller plays it through POST /sid, which asks before it resets a program
+    const r = await startShelfItem(live, m[1], shelf);
+    if (!r.ok) return err(400, r.error);
+    live.say("host", `Library title “${item.name}” (${item.set}): copied to your shelf as ${shelf} and started (${r.how}).`, "monitor");
+    return json({ ok: true, shelf, how: r.how, title: item.name });
   }],
 
   // ----- reading the machine -----

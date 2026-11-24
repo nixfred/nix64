@@ -29,6 +29,11 @@ export type Settings = {
     /** keys per second when the agent types */
     typingSpeed: number;
   };
+  /** the library: a folder of your own disks, tapes and cartridges, browsed from a catalog (nix64 library index) */
+  library: {
+    /** absolute path, or ~/...; empty = ~/c64-library. NIX64_LIBRARY overrides it. */
+    path: string;
+  };
   firstRunDone: boolean;
 };
 
@@ -37,6 +42,7 @@ export const DEFAULTS: Settings = {
   sound: { ui: true, muted: false },
   keys: { joystickKeys: false },
   agent: { choice: "auto", model: "", localEndpoint: "", assist: "eager", typingSpeed: 30 },
+  library: { path: "" },
   firstRunDone: false,
 };
 
@@ -72,6 +78,8 @@ function sane(next: Settings): Settings {
   if (!["auto", "claude", "codex", "pi", "opencode", "crush"].includes(next.agent.choice)) next.agent.choice = DEFAULTS.agent.choice;
   const ep = next.agent.localEndpoint.trim();
   try { next.agent.localEndpoint = ep && /^https?:$/.test(new URL(ep).protocol) ? ep : ""; } catch { next.agent.localEndpoint = ""; }
+  const lp = next.library.path.trim();
+  next.library.path = lp === "~" || lp.startsWith("~/") || lp.startsWith("/") ? lp.slice(0, 400) : ""; // a relative path would mean a different folder for each program that reads it
   return next;
 }
 

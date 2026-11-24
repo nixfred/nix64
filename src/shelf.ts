@@ -74,8 +74,8 @@ export function removeFromShelf(name: string): void {
 
 // ---------- zip: archive items are mostly zips of disk images ----------
 
-/** Pull the media files out of a zip. Reads the central directory; handles stored and deflated entries. */
-export function unzipMedia(zip: Uint8Array): { name: string; data: Uint8Array }[] {
+/** Pull the media files out of a zip (or just the one entry named `only`, by its full path in the zip). Reads the central directory; handles stored and deflated entries. */
+export function unzipMedia(zip: Uint8Array, only?: string): { name: string; data: Uint8Array }[] {
   const b = Buffer.from(zip.buffer, zip.byteOffset, zip.byteLength);
   let eocd = -1;
   for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--) if (b.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
@@ -89,7 +89,7 @@ export function unzipMedia(zip: Uint8Array): { name: string; data: Uint8Array }[
     const nlen = b.readUInt16LE(p + 28), elen = b.readUInt16LE(p + 30), clen = b.readUInt16LE(p + 32), lho = b.readUInt32LE(p + 42);
     const name = b.subarray(p + 46, p + 46 + nlen).toString();
     p += 46 + nlen + elen + clen;
-    if (name.endsWith("/") || !MEDIA_EXT.has(extname(name).toLowerCase()) || usize > MAX) continue;
+    if (name.endsWith("/") || !MEDIA_EXT.has(extname(name).toLowerCase()) || usize > MAX || (only !== undefined && name !== only)) continue;
     const dstart = lho + 30 + b.readUInt16LE(lho + 26) + b.readUInt16LE(lho + 28);
     const raw = b.subarray(dstart, dstart + csize);
     // the size a zip DECLARES is the author's word: cap what inflate may really produce, or a few KB can expand to gigabytes
