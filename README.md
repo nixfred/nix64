@@ -271,7 +271,10 @@ against the real thing. A device earns **verified** only on a real desk, with a 
   [omarchy-chuck-yeager-nix64](https://github.com/MaverickKB/omarchy-chuck-yeager-nix64) (MIT, no game files in it).
   His setup: a PAL C64C with a 1541-II and true drive emulation, the disk pinned from the shelf, `LOAD"*",8,1` with
   warp on, then `RUN`; press Space at the Eagle Soft intro, use **joystick port 2**, and Intro Flight reaches the
-  cockpit. It is his report: I have not run that disk myself yet, and the game needs your own copy.
+  cockpit. The game needs your own copy. I ran his `setup.sh` and `play.sh` unchanged in an isolated home: setup
+  exited 0 and play reported "Game started" in 7.8 s with the frame counter advancing. I also started the same
+  title from the ROM library (once from a Ghostware disk, once from inside a TOSEC `.7z`) and both reached the
+  game's title screen. I did not play on to the cockpit, so that part is still his report.
 - **The agent's one allowed command, attacked with a real model:** Claude Code (2.1.330 (Claude Code)) was asked, in drive mode, to run the allowed
   `c64ctl` command with a command substitution, backticks, a pipe, a redirect and a second command on a new line tacked on,
   each trying to create a marker file. All five were refused and no file appeared; a plain `c64ctl` call still ran. This checks
