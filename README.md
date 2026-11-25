@@ -313,8 +313,7 @@ nix64 library run NAME ID          # start that title on the running machine NAM
   host, mirror or check any of it. Unpack each into its own folder under the library (`~/c64-library/ghostware`, `~/c64-library/tosec`).
 - **Tested** on a real engine: the unit tests build a library of their own files (loose, in zips, with a DOS code page name like `720°`),
   and `tests/ui/features.ts` indexes one from the tab, searches, presses Start and watches the title's own `PRINT` appear on the real screen.
-  The real Ghostware C64 ROM Collection (8,239 titles) and the unpacked TOSEC archives (470,694 more, almost all inside `.7z` files) indexed together in 7 seconds with nothing unreadable. *Chuck Yeager's Advanced Flight Trainer* was started with `nix64 library run`, once from a Ghostware disk image and once from a TOSEC title read out of a `.7z` (4.4 s), and both reached the game's title screen. Tape and cartridge starts use VICE's autostart and have
-  not been tried against a real tape or cartridge yet.
+  The real Ghostware C64 ROM Collection (8,239 titles) and the unpacked TOSEC archives (470,694 more, almost all inside `.7z` files) indexed together in 7 seconds with nothing unreadable. *Chuck Yeager's Advanced Flight Trainer* was started with `nix64 library run`, once from a Ghostware disk image and once from a TOSEC title read out of a `.7z` (4.4 s), and both reached the game's title screen. Tape and cartridge starts use VICE's autostart, and each was tried against real media from the collections: *Pitstop* (a `.crt` out of a TOSEC `.7z`, its title screen in 2.2 s), *M.U.L.E.* (a Ghostware `.T64`, its title screen in 1.2 s) and *Pitfall* (a raw `.tap` out of a TOSEC `.7z`, its loader intro on screen within 20 s). Known gap: the Tape and Cartridge panel still says "no cartridge port" while an autostarted cartridge is running.
 
 ## Roadmap
 
